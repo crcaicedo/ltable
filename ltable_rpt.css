@@ -1,0 +1,9 @@
+body.ltrpt {margin-left: 0px; margin-right: 0px; background: white; color: black; font-family: monospace; font-size: 8pt;}
+table.ltrpthdr {font-size: 10pt; border-style: none;}
+table.ltrptbody {font-size: 8pt; border-style: none;}
+th.ltrptbody {font-size: 8pt; font-weight: bold; white-space: nowrap; border-bottom: 1px solid black;}
+td.ltrptizq {text-align: left;}
+td.ltrptder {text-align: right;}
+table.ltrptfooter {border-style: none;}
+td.ltrptfooter {font-size:8pt; font-weight:bold; white-space:nowrap; border-top:1px solid black; text-align:right;}
+h5.ltrpt {page-break-after: always;}
