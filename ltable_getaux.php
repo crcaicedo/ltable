@@ -1,23 +1,23 @@
 <?php
 require_once "ltable_olib.php";
 
-nocache();
 $tmpstr = '';
 $nr = 0;
+$fo = new lt_form();
 if (isset($_REQUEST['nq']))
 {
-    if (mprs_dbcn())
+    if ($fo->dbopen())
     {
 	    $nq = intval($_REQUEST['nq']);
 	    for ($ii = 0; $ii < $nq; $ii++)
 	    {
 		    $query = sprintf("SELECT %s FROM %s WHERE %s='%s'", 
 		    	$_REQUEST['c'.$ii], $_REQUEST['t'.$ii], $_REQUEST['k'.$ii], $_REQUEST['v'.$ii]);
-		    if (($res = mysql_query($query)) !== false)
+		    if (($qq = myquery::q($query, LTABLE-GETAUX, FALSE, FALSE, MYROW)))
 		    {
 			    $nr = 0;
 			    $tmpstr3 = '';
-			    while (($row = mysql_fetch_row($res)) !== false)
+			    foreach ($qq->a as $row)
 			    {
 				    $tmpstr2 = '';
 				    foreach ($row as $valor)
@@ -27,15 +27,15 @@ if (isset($_REQUEST['nq']))
 				    $tmpstr3 .= $tmpstr2;
 				    $nr++;
 			    }
-			    mysql_free_result($res);
 			    $tmpstr .= '{'.$nr.'}'.$tmpstr3;
 		    }
 		    else
 		    {
 			    $nr = -1;
-			    $tmpstr .= "{-1}\"[Error] " . mysql_error() . "\"";
+			    $tmpstr .= "{-1}\"[Error] Error ejecutando query\"";
 		    }
 	    }
+	    $fo->dbclose();
     }
     else
     {

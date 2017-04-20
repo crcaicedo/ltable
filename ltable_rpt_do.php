@@ -7,7 +7,7 @@ $para = array("rpt_name");
 if (parms_isset($para, 2))
 {
 	$rpt_name = $_REQUEST['rpt_name'];
-	if (mprs_dbcn())
+	if ($fo->dbopen())
 	{
 		$rpt = null;
 		if (ltrpt_load($fo, $rpt_name, $rpt))
@@ -65,7 +65,7 @@ if (parms_isset($para, 2))
 		}
 		else $fo->volver("ltable_rpt.php?rpt=$rpt_name");
 
-		mysql_close();
+		$fo->dbclose();
 	}
 	else $fo->volver("ltable_rpt.php?rpt=$rpt_name");
 }

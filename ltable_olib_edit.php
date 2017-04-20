@@ -1,26 +1,7 @@
 <?php
 require_once "ltable_olib.php";
+require_once 'ltable_olib_edit_site.php';
 
-function ltedit_preprocess($fo, $lto)
-{
-	$isok = true;
-	
-	if ($lto->tabla == 'depositos')
-	{
-		if ($lto->fa['estatus']->v == 0)
-		{
-			if (aclcheck($fo, 160, 18, $_SESSION['uid'], $_SESSION['pid']) < 1)
-			{
-				foreach ($lto->fa as $fl) $fl->ro = true;
-				if ($lto->fa['dep_origen']->v != 'CAJ') $lto->rdonly = true;
-			}
-		}
-	}
-	
-	return $isok;
-}
-
-$trx = '';
 $para = array('tabla', 'campo', 'valor');
 $fo = new lt_form();
 if (parms_isset($para,2))
@@ -55,6 +36,7 @@ if (parms_isset($para,2))
 						if ($ro) $lto->rdonly = true;
 						if ($nodelete) $lto->allowdel = false;
 						$fo->buf .= $lto->editar($urlret);
+						ltedit_postprocess($fo, $lto);
 					}
 				}
 				else $fo->buf .= $lto->render_error();

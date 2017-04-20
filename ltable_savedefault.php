@@ -6,7 +6,7 @@ $fo = new lt_form();
 $para = array("fm", "ctrl", "valor");
 if (parms_isset($para, 2))
 {
-	if (mprs_dbcn())
+	if ($fo->dbopen())
 	{
 		if ($fo->usrchk(2, 2) !== USUARIO_UNAUTH)
 		{
@@ -18,7 +18,7 @@ if (parms_isset($para, 2))
 			}
 			else $fo->qerr("LTSVDEF-1");
 		}
-		mysql_close();
+		$fo->dbclose();
 	}
 }
 else $fo->err("LTSVDEF-0", "Parametros incorrectos");

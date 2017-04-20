@@ -1,8 +1,7 @@
 <?php
-require_once "ltable_siteconf.php";
 require_once "ltable_olib.php";
-require_once "ltable_olib_val.php";
-require_once "ltable_olib_up_site.php";
+require_once RUTA_LT."ltable_olib_val.php";
+require_once RUTA_LT."ltable_olib_up_site.php";
 
 $fox = new lt_form();
 $para = array('tabla', 'campo', 'valor', 'nuevo','forzar_valor','cret');
@@ -15,6 +14,7 @@ if (parms_isset($para,2))
 	$nuevo = intval($_REQUEST['nuevo']) == 1;
 	$forzar_valor = intval($_REQUEST['forzar_valor']) == 1;
 	$urlret = sprintf("ltable_olib_main.php?tabla=%s", $tabla);
+    $empotrado = isset($_REQUEST['_empotrado']);
 	if (isset($_REQUEST['cret'])) $urlret = $_REQUEST['cret'];
 
 	if ($have_js)
@@ -29,8 +29,15 @@ if (parms_isset($para,2))
 				if ($lto->nuevo) $shift = 4; else $shift = 2;
 				if ($fox->usrchk($lto->form_id+$shift, $lto->form_rw) != USUARIO_UNAUTH)
 				{
-					if (LT_FULL_HEADER) $fox->encabezado(true);
-					else $fox->encabezado_base();
+                    if ($empotrado) {
+                        $fox->encabezado_base();
+                        $fox->wait_icon();
+                        $fox->msg();
+                    }
+                    else {
+                        if (LT_FULL_HEADER) $fox->encabezado(true);
+                        else $fox->encabezado_base();
+                    }
 					
 					$lto->load_post();
 					if (lto_validate($lto, $fox))
@@ -43,8 +50,7 @@ if (parms_isset($para,2))
 							$fox->ok("Dependencias");
 
 							$allok = false;
-							mysql_query("SET autocommit=0");
-							mysql_query("START TRANSACTION");
+                            myquery::start();
 							if (lto_preprocess($lto, $campo, $valor, $fox))
 							{
 								if ($lto->update($campo, $valor))
@@ -61,11 +67,10 @@ if (parms_isset($para,2))
 							}
 							if ($allok)
 							{
-								mysql_query("COMMIT");
+								myquery::end(TRUE);
 								lto_lastprocess($lto, $campo, $valor, $fox);
-							} 
-							else mysql_query("ROLLBACK");
-							mysql_query("SET autocommit=1");
+							}
+							else myquery::end(FALSE);
 						}
 						///else $fox->buf .= $lto->render_error();
 					}
@@ -76,10 +81,12 @@ if (parms_isset($para,2))
 	}
 	else $fox->err("LTUP-1", "JavaScript no habilitado en browser.");
 
-	$fox->hr();
-	$fox->par();
-	$fox->lnk($urlret, "Volver al formulario principal");
-	$fox->parx();
+    if (!$empotrado) {
+        $fox->hr();
+        $fox->par();
+        $fox->lnk($urlret, "Volver al formulario principal");
+        $fox->parx();
+    }
 }
 $fox->footer();
 $fox->show();

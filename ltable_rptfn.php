@@ -1,12 +1,24 @@
 <?php
-require_once "mprsfn.php";
-require_once "ltable_rptfn.php";
-///require_once "cxcfn.php";
+require_once "ltable_olib.php";
 include 'Classes/PHPExcel.php';
 include 'Classes/PHPExcel/Writer/Excel5.php';
 
 define("F_BLANKRPT", "blank_repeat");
 
+define('LTRPT_CONTEO', 1);
+define('LTRPT_SUMA', 2);
+define('LTRPT_PROMEDIO', 3);
+define('LTRPT_PORCENTAJE', 4);
+define('LTRPT_PORCIENTO', 5);
+
+/**
+ * 
+ * Funcion interna, no usar. Construye encabezados de columna.
+ * @param array $rpt
+ * Matriz de reporte
+ * @param string $buf
+ * Buffer
+ */
 function ltrpt_fltitles(&$rpt, &$buf)
 {
 	foreach ($rpt['campa'] as $cp)
@@ -21,27 +33,38 @@ function ltrpt_fltitles(&$rpt, &$buf)
 	$buf .= "</tr>";	
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Construye encabezado de pagina.
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_header(&$rpt)
 {
-	$rpt['saltar'] = $rpt['pag_no'] < $rpt['pag_max'];
+	$ou = '';
+	$rpt['saltar'] = $rpt['recrem'] > 0;
+	if ($rpt['pag_no'] > 1) $ou .= "<h5 class=\"ltrpt\"></h5>";
 	
 	$pade = $rpt['sparm'];
 	$ordss = $rpt['sorden'];
 
-	$ou = "<table class=\"ltrpthdr\">";
+	$ou .= "<table class=\"ltrpthdr\">";
 	$prnm = $rpt['pnm'];
-	if (!enblanco($prnm)) $prnms = " - Proyecto: $prnm"; else $prnms = ''; 
-	if ($rpt['pag_no'] == 1 || $rpt['header_inall'])
+	if (!enblanco($prnm)) $prnms = " - ".$prnm; else $prnms = '';
+	if ($rpt['header_project'] && ($rpt['pag_no'] == 1 || $rpt['header_inall']))
 	{
-		$ou .= "<tr><td colspan=3><b>" . SOFTNAME . " Orion Corp$prnms</b></td><tr>";
+		$ou .= sprintf("<tr><td colspan=3><b>%s%s</b></td></tr>", SOFTNAME, $prnms);
 	}
-	$ou .= sprintf("<tr><td>%s</td><td>Emitido: %s %s</td><td>Pag. %d/%d</td></tr>", 
-		$rpt['title'], dtoc($rpt['fe']), htoc($rpt['hr']), 
+	$ou .= sprintf("<tr><td>%s</td><td>Emitido: %s %s %s</td><td>Pag. %d/%d</td></tr>", 
+		$rpt['title'], dtoc($rpt['fe']), htoc($rpt['hr']), $rpt['unm'], 
 		$rpt['pag_no'], $rpt['pag_max']);
 		
 	
 	if (!enblanco($pade)) $ou .= "<tr><td colspan=3>Parametros: $pade</td></tr>";
 	if (!enblanco($ordss)) $ou .= "<tr><td colspan=3>Ordenado por: $ordss</td></tr>";
+	if (!enblanco($rpt['header_custom'])) $ou .= sprintf("<tr><td colspan=3>%s</td></tr>",
+		$rpt['header_custom']);
 	$ou .= "</table>";
 	
 	$ou .= "<table class=\"ltrptbody\"><tr>";
@@ -50,14 +73,27 @@ function ltrpt_header(&$rpt)
 	return $ou;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Construye pie de pagina.
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_footer(&$rpt)
 {
 	$ou = '';
-	if ($rpt['totalize'] == 1)
+	if ($rpt['totalize'] == 1 || $rpt['footer_page'] != '' || $rpt['footer_rpt'] != '')
 	{
+		//if ($rpt['grpcount'] > 0 && $rpt['recrem'] > 0) $ou.=ltrpt_grp_footer($rpt);
+		if ($rpt['grpcount'] > 0)
+		{ 
+			if ($rpt['grp'][$rpt['grpndx']]['lncount'] > 0) $ou.=ltrpt_grp_footer($rpt);
+		}
+		
 		if ($rpt['foc'] > 0)
 		{
-			$ou = "<tr>";
+			$ou .= "<tr>";
 			foreach ($rpt['campa'] as $cp)
 			{
 				if ($cp['style_th'] != "") $sty = sprintf(" style=\"%s\"", $cp['style_th']); else $sty = "";
@@ -67,15 +103,20 @@ function ltrpt_footer(&$rpt)
 					$ou .= "<td></td>";
 					continue;
 				}
-				if ($cp['footer_op'] == 1)
+				if ($cp['hidden'])
+				{
+					// TODO: almacenar otros calculos
+					continue;
+				}
+				if ($cp['footer_op'] == LTRPT_CONTEO)
 					$ou .= $tds . number_format($cp['footer_cnt'], 0, ',', '.') . "</td>";
 				if ($cp['t'] == 'i' || $cp['t'] == 'b')
 				{
-					if ($cp['footer_op'] == 2)
+					if ($cp['footer_op'] == LTRPT_SUMA)
 						$ou .= $tds . number_format($cp['footer_sum'], 0, ',', '.') . "</td>";
-					if ($cp['footer_op'] == 3)
+					if ($cp['footer_op'] == LTRPT_PROMEDIO)
 						$ou .= $tds . number_format($cp['footer_sum'] / $cp['footer_cnt'], 2, ',', '.') . "</td>";
-					if ($cp['footer_op'] == 4)
+					if ($cp['footer_op'] == LTRPT_PORCENTAJE)
 					{
 						$dva = $cp['dividendo'];
 						$dvb = $cp['divisor'];
@@ -84,40 +125,87 @@ function ltrpt_footer(&$rpt)
 							$rpt['campa'][$dvb]['footer_sum'], 0, ',', '.'));
 					}
 				}
-				else
+				if ($cp['t'] == 'n')
 				{
-					if ($cp['footer_op'] == 2)
+					if ($cp['footer_op'] == LTRPT_SUMA)
 						$ou .= $tds . number_format($cp['footer_sum'], $cp['pd'], ',', '.') . "</td>";
-					if ($cp['footer_op'] == 3)
+					if ($cp['footer_op'] == LTRPT_PROMEDIO)
 						$ou .= $tds . number_format($cp['footer_sum'] / $cp['footer_cnt'], $cp['pd'], ',', '.') . "</td>";
-					if ($cp['footer_op'] == 4)
+					if ($cp['footer_op'] == LTRPT_PORCENTAJE)
 					{
 						$dva = $cp['dividendo'];
 						$dvb = $cp['divisor'];
-						$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty,
+						$ou .= sprintf("<td c$rptlass=\"ltrptfooter\"%s>%s</td>", $sty,
 							number_format(($rpt['campa'][$dva]['footer_sum'] * 100) / 
 							$rpt['campa'][$dvb]['footer_sum'], $cp['pd'], ',', '.'));
 					}
 				}
 			}
 			$ou .= "</tr>";
-			if ($rpt['pag_no'] == $rpt['pag_max'])
+		}
+		///if ($rpt['pag_no'] == $rpt['pag_max'])
+		if ($rpt['recrem'] == 0)
+		{
+			// TODO: totales x rpt
+			if ($rpt['footer_rpt'] != '')
 			{
-				// totales x rpt
+				$campo = &$rpt['campa'];
+				// TODO: calculate width and height of page footer
+				while (($nfn = strpos($rpt['footer_rpt'], '<<')) !== false)
+				{
+					if (($nt = strpos($rpt['footer_rpt'], '>>', $nfn+1)) !== false)
+					{
+						$fn = 'return ' . substr($rpt['footer_rpt'], $nfn + 2, $nt - $nfn - 2) . ';';
+						$sfn = substr($rpt['footer_rpt'], $nfn, $nt - $nfn + 2);
+						$rfn = eval($fn);
+						$rpt['footer_rpt'] = str_replace($sfn, $rfn, $rpt['footer_rpt']);
+					}
+					else break;
+				}				
+				$ou .= sprintf("<tr><td colspan=\"%d\">%s</td></tr>", $rpt['colc'], $rpt['footer_rpt']);
+			}
+			if ($rpt['footer_fn'] != '')
+			{
+				$fnx = $rpt['footer_fn'];
+				$fnx($fo, $rpt);
 			}
 		}
+		if ($rpt['footer_page'] != '')
+		{
+			// TODO: calculate width and height of page footer
+			$ou .= sprintf("<tr><td colspan=\"%d\">%s</td></tr>", $rpt['colc'], $rpt['footer_page']);
+		}
+		$ou .= "</table>";
 	}
-	$ou .= "</table>";
-	if ($rpt['saltar']) $ou .= "<h5 class=\"ltrpt\"></h5>";
+	///if ($rpt['saltar']) $ou .= "<h5 class=\"ltrpt\"></h5>";
 	
 	return $ou;
 }
 
+/**
+ * 
+ * Resetear matriz de reporte
+ * @param array $rpt
+ * Matriz de reporte
+ * @param number $lnxpag
+ * Lineas por pagina
+ * @param string $sparm
+ * Parametros del reporte (visibles)
+ * @param string $sorden
+ * Orden del reporte (visible)
+ * @param number $uid
+ * (opcional, no usar) ID del usuario
+ * @param number $pid
+ * (opcional, no usar) ID del proyecto
+ * @param string $nombre_proyecto
+ * (opcional, no usar) Nombre del proyecto
+ */
 function ltrpt_blank(&$rpt, $lnxpag = 44, $sparm = '', $sorden = '', 
-	$uid=0, $pid=0, $pnm='')
+	$uid=0, $pid=0, $nombre_proyecto='')
 {
 	$rpt['title'] = '';
 	$rpt['header_inall'] = false;
+	$rpt['header_project'] = true;
 	$rpt['have_hlines'] = false;
 	$rpt['sparm'] = $sparm;
 	$rpt['sorden'] = $sorden;
@@ -135,12 +223,16 @@ function ltrpt_blank(&$rpt, $lnxpag = 44, $sparm = '', $sorden = '',
 	$rpt['grpndx'] = 0;
 	$rpt['totalize'] = 1;
 	
-	$rpt['uid'] = $uid == 0 ? $_COOKIE['uid']: $uid;
-	$rpt['pid'] = $pid == 0 ? $_COOKIE['pid']: $pid;
-	$rpt['pnm'] = $pnm == '' ? $_COOKIE['pnm']: $pnm;
+	$rpt['uid'] = $uid == 0 ? $_SESSION['uid']: $uid;
+	$rpt['pid'] = $pid == 0 ? $_SESSION['pid']: $pid;
+	$rpt['pnm'] = $nombre_proyecto == '' ? $_SESSION['pnm']: $nombre_proyecto;
+	$rpt['unm'] = $_SESSION['unm'];
 
 	$rpt['pag_no'] = 1;
 	$rpt['pag_max'] = 0;
+	$rpt['footer_page'] = '';
+	$rpt['footer_rpt'] = $rpt['footer_fn'] = '';
+	$rpt['header_custom'] = '';
 	settype($rpt['pag_no'], 'int');
 	settype($rpt['pag_max'], 'int');
 
@@ -148,39 +240,77 @@ function ltrpt_blank(&$rpt, $lnxpag = 44, $sparm = '', $sorden = '',
 	$rpt['gencsv'] = true;
 }
 
+/**
+ * 
+ * Agregar columna a matriz de reporte
+ * @param array $rpt
+ * Matriz de reporte
+ * @param string $n
+ * Nombre interno de la columna
+ * @param string $t
+ * Tipo de datos que contiene la columna (n:numerico,c:caracter,i:entero,d:fecha,t:fecha-hora,h:hora)
+ * @param int $l
+ * Ancho de la columna en caracteres
+ * @param number $pd
+ * Cantidad de decimales si el tipo es 'n'
+ * @param string $title
+ * Titulo visible de la columna
+ * @param number $footer_op
+ * (opcional) Operacion en pie de pagina: LTRPT_SUMA, LTRPT_CONTEO
+ * @param bool $hidden
+ * (opcional) Indica si es una columna invisible
+ * @param string $src
+ * (opcional) Fuente de los datos
+ * @param string $style
+ * (opcional) Estilo CSS a aplicar a cada linea
+ * @param bool $subtotal
+ * (opcional) Subtotalizacion por grupo
+ * @param string $style_th
+ * (opcional) Estilo CSS a aplicar al titulo de la columna
+ */
 function ltrpt_addfl(&$rpt, $n, $t, $l, $pd=0, $title='', $footer_op=0, $hidden=0, 
 	$src='', $style='', $subtotal=false, $style_th="")
 {
 	$defval = $t == 'c' ? '': 0; 
 	$rpt['campa'][$n] = array ('n'=>$n, 't'=>$t, 'l'=>$l, 'pd'=>$pd,
-		'style'=>$style, 'title'=>$title, 'src'=>$src, 'hidden'=>$hidden,
+		'style'=>$style, 'title'=>$title, 'src'=>$src, 'hidden'=>$hidden, 'rojo'=>FALSE,
 		'footer_op'=>$footer_op, 'subtotal'=>$subtotal,
 		'lastvalue'=>null, 'blank_repeat'=>false, 'blanquear'=>false, 'bzero'=>false, 
-		'blank_reset'=>"", 'style_th'=>$style_th,'checkbox'=>0);
+		'blank_reset'=>"", 'style_th'=>$style_th,'checkbox'=>0,'width'=>0,'height'=>0);
 	if (!$hidden) $rpt['colc']++;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Construye encabezado de grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_grp_header(&$rpt)
 {
-	///ltrpt_grp_total_rst($rpt);
-	
 	$ndx = $rpt['grpndx'];
-	///$rpt['grp'][$ndx]['lncount'] = 0;
-	///$rpt['grp'][$ndx]['reccount'] = 0;
 	$buf = sprintf("<tr><td colspan=\"%d\" style=\"font-weight: bold; border: 1px solid;\">%s</td>" .
-		"</tr>", $rpt['colc'], $rpt['grp'][$ndx]['title']);
-	$rpt['lncount']++;
+		"</tr><tr>", $rpt['colc'], $rpt['grp'][$ndx]['title']);
 	ltrpt_fltitles($rpt, $buf);
-	$rpt['lncount']++;
 	
 	return $buf;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Construye pie de grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_grp_footer(&$rpt)
 {
-	$ou = '';
-	if ($rpt['foc'] > 0) {
-		$grp = $rpt['grp'][$rpt['grpndx']];
+	$ou = '';	
+	if ($rpt['foc'] > 0)
+	{
+		$grp = &$rpt['grp'][$rpt['grpndx']];
+		$grp['lncount'] = 0;
 		$ou = "<tr>";
 		foreach ($rpt['campa'] as $cp)
 		{
@@ -192,51 +322,64 @@ function ltrpt_grp_footer(&$rpt)
 				$ou .= "<td></td>";
 				continue;
 			}
-			if ($cp['footer_op'] == 1)
+			if ($cp['hidden'])
+			{
+				// TODO: almacenar otros calculos
+				continue;
+			}
+			
+			if ($cp['footer_op'] == LTRPT_CONTEO)
 				$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty, number_format($grp[$cn]['footer_cnt'], 0, ',', '.'));
 			if ($cp['t'] == 'i' || $cp['t'] == 'b')
 			{
-				if ($cp['footer_op'] == 2)
+				if ($cp['footer_op'] == LTRPT_SUMA)
 					$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty, number_format($grp[$cn]['footer_sum'], 0, ',', '.'));
-				if ($cp['footer_op'] == 3)
+				if ($cp['footer_op'] == LTRPT_PROMEDIO)
 					$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty, number_format($grp[$cn]['footer_sum'] / $grp[$cn]['footer_cnt'], 0, ',', '.'));
-				if ($cp['footer_op'] == 4)
+				if ($cp['footer_op'] == LTRPT_PORCENTAJE || $cp['footer_op'] == LTRPT_PORCIENTO)
 				{
 					$dva = $cp['dividendo'];
 					$dvb = $cp['divisor'];
+					if ($cp['footer_op'] == LTRPT_PORCENTAJE) $factor = 100; else $factor = 1;
 					$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty,
-					number_format(($grp[$dva]['footer_sum'] * 100) / $grp[$dvb]['footer_sum'], 
+					number_format(($grp[$dva]['footer_sum'] * $factor) / $grp[$dvb]['footer_sum'], 
 					0, ',', '.'));
 				}
 			}
-			else
+			if ($cp['t'] == 'n')
 			{
-				if ($cp['footer_op'] == 2)
+				if ($cp['footer_op'] == LTRPT_SUMA)
 					$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty,
 					number_format($grp[$cn]['footer_sum'], $cp['pd'], ',', '.'));
-				if ($cp['footer_op'] == 3)
+				if ($cp['footer_op'] == LTRPT_PROMEDIO)
 					$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty,
 					number_format($grp[$cn]['footer_sum'] / $grp[$cn]['footer_cnt'], 
 					$cp['pd'], ',', '.'));
-				if ($cp['footer_op'] == 4)
+				if ($cp['footer_op'] == LTRPT_PORCENTAJE || $cp['footer_op'] == LTRPT_PORCIENTO)
 				{
 					$dva = $cp['dividendo'];
 					$dvb = $cp['divisor'];
+					if ($cp['footer_op'] == LTRPT_PORCENTAJE) $factor = 100; else $factor = 1;
 					$ou .= sprintf("<td class=\"ltrptfooter\"%s>%s</td>", $sty,
-					number_format(($grp[$dva]['footer_sum'] * 100) / $grp[$dvb]['footer_sum'], 
+					number_format(($grp[$dva]['footer_sum'] * $factor) / $grp[$dvb]['footer_sum'], 
 					$cp['pd'], ',', '.'));
 				}
 			}
 		}
 		$ou .= "</tr>";
-		$rpt['lncount']++;
 	}
 	$ou .= "<tr style=\"border-left: none; height: 10px;\"></tr>";
-	$rpt['lncount']++;
 	
 	return $ou;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Construye subtotal de grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_subtotal_show(&$rpt)
 {
 	$ou = "<tr>";
@@ -252,29 +395,42 @@ function ltrpt_subtotal_show(&$rpt)
 		$cn = $cp["n"];
 		$cnt = $rpt["subtotal_cnt"][$cn];
 		$suma = $rpt["subtotal_sum"][$cn];
-		
-		if ($cp['footer_op'] == 1)
-			$ou .= $tds . number_format($cnt, 0, ',', '.') . "</td>";
-		if ($cp['t'] == 'i' || $cp['t'] == 'b')
+
+		if ($cp['hidden'])
 		{
-			if ($cp['footer_op'] == 2)
-				$ou .= $tds.number_format($suma, 0, ',', '.')."</td>";
-			if ($cp['footer_op'] == 3) $ou .= $tds.nes($suma/$cnt)."</td>";
+			// almacenar otros calculos
+			continue;
 		}
 		else
 		{
-			if ($cp['footer_op'] == 2)
-				$ou .= $tds.number_format($suma, $cp['pd'], ',', '.')."</td>";
-			if ($cp['footer_op'] == 3)
-				$ou .= $tds.number_format($suma/$cnt, $cp['pd'], ',', '.')."</td>";
+			if ($cp['footer_op'] == LTRPT_CONTEO)
+				$ou .= $tds . number_format($cnt, 0, ',', '.') . "</td>";
+			if ($cp['t'] == 'i' || $cp['t'] == 'b')
+			{
+				if ($cp['footer_op'] == LTRPT_SUMA)
+					$ou .= $tds.number_format($suma, 0, ',', '.')."</td>";
+				if ($cp['footer_op'] == LTRPT_PROMEDIO) $ou .= $tds.nes($suma/$cnt)."</td>";
+			}
+			else
+			{
+				if ($cp['footer_op'] == LTRPT_SUMA)
+					$ou .= $tds.number_format($suma, $cp['pd'], ',', '.')."</td>";
+				if ($cp['footer_op'] == LTRPT_PROMEDIO)
+					$ou .= $tds.number_format($suma/$cnt, $cp['pd'], ',', '.')."</td>";
+			}
 		}
 	}
 	$ou .= "</tr>";
-	// TODO: $rpt['lncount']++;
 	
 	return $ou;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Inicializa subtotal grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ */
 function ltrpt_subtotal_init(&$rpt)
 {
 	foreach ($rpt['subtotal_fl'] as $cn)
@@ -284,6 +440,12 @@ function ltrpt_subtotal_init(&$rpt)
 	}
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Acumula subtotal grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ */
 function ltrpt_subtotal_acum(&$rpt, &$row)
 {
 	foreach ($rpt['subtotal_fl'] as $cn)
@@ -293,6 +455,14 @@ function ltrpt_subtotal_acum(&$rpt, &$row)
 	}
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Chequea subtotal grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ * @param string $buf
+ * Buffer
+ */
 function ltrpt_subtotal_check(&$rpt, &$buf)
 {
 	$dosubtotal = false;
@@ -308,18 +478,28 @@ function ltrpt_subtotal_check(&$rpt, &$buf)
 	//else $buf .= "<p>cc<=0</p>";
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Construye linea de reporte.
+ * @param array $rpt
+ * Matriz de reporte
+ * @param array $row
+ * Matriz con los valores del registro actual 
+ * @return string
+ */
 function ltrpt_body_ln(&$rpt, $row)
 {
-	$ou = "";
+	$ou = $hlx = "";
 	$hl = $rpt['hl'];
 	$ndx = $rpt['grpndx'];
-
+	
 	if ($rpt['genxls']) ltrpt_excel_add($rpt, $row);
 	
 	$dosubtotal = false;
 	$tmpcva = array();
 	foreach ($rpt['campa'] as &$cpx)
 	{	
+		
 		if ($cpx['hidden'] == 1) continue;		
 		$cn = $cpx['n'];
 		$vv = $row[$cn];
@@ -350,7 +530,7 @@ function ltrpt_body_ln(&$rpt, $row)
 		}
 		$tmpcva[$cn] = $vv;
 	}
-	fputcsv($rpt['ff'], $tmpcva);
+	if ($rpt['gencsv'] && $rpt['ff'] !== false) fputcsv($rpt['ff'], $tmpcva);
 
 	foreach ($rpt['campa'] as &$cpk)
 	{
@@ -367,13 +547,15 @@ function ltrpt_body_ln(&$rpt, $row)
 		ltrpt_subtotal_init($rpt);
 	}
 	ltrpt_subtotal_acum($rpt, $row);
-
-	$ou .= "<tr>";
+	
+	if(($rpt['lncount']%2) == 0){
+	$ou .= "<tr style=\"vertical-align:top;background:rgb(230,230,230);\">";
+	}else $ou .= "<tr style=\"vertical-align:top;\">";
+		
 	if (isset($row['_highlight'])) $hl .= "style=\"border-top:1px solid black;\""; 
+	if ($rpt['have_hlines']) $hlx = 'border-bottom:1px solid black;';
 	foreach ($rpt['campa'] as &$cp)
 	{
-		if ($cp['hidden'] == 1) continue;
-
 		$cn = $cp['n'];
 		$vv = $row[$cn];
 		if ($cp['footer_op'] != 0) {
@@ -385,6 +567,8 @@ function ltrpt_body_ln(&$rpt, $row)
 				$rpt['grp'][$ndx][$cn]['footer_sum'] += $vv;
 			}
 		}
+		if ($cp['hidden'] == 1) continue;
+		
 		$t = $cp['t'];
 		if ($t == 'i')
 			$vv = number_format($vv, 0, ',', '.');
@@ -408,34 +592,48 @@ function ltrpt_body_ln(&$rpt, $row)
 			
 		if (enblanco($cp['style']))
 		{
+			$srojo = '';
+			if ($cp['rojo']) $srojo = $vv < 0 ? ' rojo': '';
 			if (strstr('nibdth', $t) !== false)
-				$ou .= "<td class=\"ltrptder\"$hl>$vv</td>";
+				$ou .= "<td class=\"ltrptder$srojo\"$hl>$vv</td>";
 			if (strstr('cm', $t) !== false)
-				$ou .= "<td class=\"ltrptizq\"$hl>$vv</td>";
+				$ou .= "<td class=\"ltrptizq$srojo\"$hl>$vv</td>";
 		}
 		else
 		{			
-			$ou .= "<td style=\"" . $cp['style'] . "\">$vv</td>";
+			$srojo = '';
+			if ($cp['rojo']) $srojo = $vv < 0 ? 'color:red;': '';
+			$ou .= "<td style=\"" . $hlx . $cp['style'] . "\">$vv</td>";
 		}
 	}
+	
 	$ou .= "</tr>";
-
+	
 	$rpt['lncount']++;
 	$rpt['recrem']--;
+	if ($rpt['grpcount'] > 0) $rpt['grp'][$rpt['grpndx']]['lncount']++;
 	
-	if ($rpt['lncount'] > $rpt['lnxpag']) {
+	if ($rpt['lncount'] > $rpt['lnxpag'])
+	{
 		$ou .= ltrpt_footer($rpt);
 		$rpt['pag_no']++;
 		$rpt['lncount'] = 0;
-		if ($rpt['recrem'] > 0) {
+		if ($rpt['recrem'] > 0)
+		{
 			$ou .= ltrpt_header($rpt);
-			if ($rpt['grpcount'] > 0)
-				$ou .= ltrpt_grp_header($rpt);
+			if ($rpt['grpcount'] > 0) $ou .= ltrpt_grp_header($rpt);
 		}
 	}
+	
 	return $ou;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Inicializar totales.
+ * @param array $rpt
+ * Matriz de reporte
+ */
 function ltrpt_total_rst(&$rpt) {
 	$rpt['foc'] = 0;
 	foreach ($rpt['campa'] as $cp) {
@@ -448,6 +646,12 @@ function ltrpt_total_rst(&$rpt) {
 	}
 }
 
+/**
+ * 
+ * Funcion interna no usar. Inicializar totales grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ */
 function ltrpt_grp_total_rst(&$rpt)
 {
 	if ($rpt['grpcount'] > 0)
@@ -465,6 +669,13 @@ function ltrpt_grp_total_rst(&$rpt)
 	}
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Inicializar cuerpo del reporte. 
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_body_init(&$rpt)
 {
 	$buf = '';
@@ -487,6 +698,7 @@ function ltrpt_body_init(&$rpt)
 			$rpt["subtotal_sum"][$cn] = 0;
 		}
 		if ($fl["subtotal"]) $rpt["subtotal_cc"]++;
+		if ($fl['width'] > 0) $rpt['campa'][$cn]['style'] .= sprintf("width:%dpx;", $fl['width']);
 	}
 	//$buf .= print_r($rpt, true);
 	
@@ -517,6 +729,12 @@ function ltrpt_body_init(&$rpt)
 	return $buf;
 }
 
+/**
+ * 
+ * Funcion interna no usar. Inicializa query de grupo.
+ * @param array $rpt
+ * Matriz de reporte
+ */
 function ltrpt_grp_query_rst(&$rpt)
 {
 	$rpt['grpcount'] = 0;
@@ -533,6 +751,13 @@ function ltrpt_grp_query_rst(&$rpt)
 	}
 }
 
+/**
+ * 
+ * Inicializa el grupo por query
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_grp_query(&$rpt)
 {
 	$buf = '';
@@ -559,42 +784,59 @@ function ltrpt_grp_query(&$rpt)
 	return $buf;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Inicializar generacion de XLS
+ * @param array $rpt
+ * Matriz de reporte
+ */
 function ltrpt_excel_init(&$rpt)
 {
 	$ffn = str_replace("/", "_", $rpt['title']);
 	if ($rpt['genxls'])
 	{
-		$objPHPExcel = new PHPExcel();
-		$objPHPExcel->getProperties()->setCreator("MPRS 1.7");
-		$objPHPExcel->getProperties()->setLastModifiedBy("MPRS 1.7");
-		$objPHPExcel->getProperties()->setTitle($rpt['title']);
-		$objPHPExcel->getProperties()->setSubject($rpt['title']);
-		$objPHPExcel->getProperties()->setDescription($rpt['title']);
+		try
+		{
+			$objPHPExcel = new PHPExcel();
+			$objPHPExcel->getProperties()->setCreator(SOFTNAME);
+			$objPHPExcel->getProperties()->setLastModifiedBy(SOFTNAME);
+			$objPHPExcel->getProperties()->setTitle($rpt['title']);
+			$objPHPExcel->getProperties()->setSubject($rpt['title']);
+			$objPHPExcel->getProperties()->setDescription($rpt['title']);
 		
-		$objPHPExcel->setActiveSheetIndex(0);
-		$nletra = 65;
-		$xcpsz = 0;
-		$rpt['xcp'] = array();
-		foreach ($rpt['campa'] as $cp)
-		{ 
-			if ($cp['hidden'] == 0)
-			{
-				$letra = chr($nletra);
-				$rpt['xcp'][$xcpsz]['l'] = $letra;
-				$rpt['xcp'][$xcpsz]['n'] = $cp['n'];
-				$rpt['xcp'][$xcpsz]['t'] = $cp['t'];
-				$objPHPExcel->getActiveSheet()->SetCellValue($letra.'1', $cp['title']);
-				$nletra++;
-				$xcpsz++;
+			$objPHPExcel->setActiveSheetIndex(0);
+			$nletra = 65;
+			$xcpsz = 0;
+			$rpt['xcp'] = array();
+			foreach ($rpt['campa'] as $cp)
+			{ 
+				if ($cp['hidden'] == 0)
+				{
+					$letra = chr($nletra);
+					$rpt['xcp'][$xcpsz]['l'] = $letra;
+					$rpt['xcp'][$xcpsz]['n'] = $cp['n'];
+					$rpt['xcp'][$xcpsz]['t'] = $cp['t'];
+					$objPHPExcel->getActiveSheet()->SetCellValue($letra.'1', $cp['title']);
+					$nletra++;
+					$xcpsz++;
+				}
 			}
+			$rpt['xo'] = $objPHPExcel;
+			$rpt['xn'] = 2;
+			$rpt['xfn'] = sprintf("rpt/%s%d.xls", $ffn, $rpt['uid']);
 		}
-		$rpt['xo'] = $objPHPExcel;
-		$rpt['xn'] = 2;
-		$rpt['xfn'] = sprintf("rpt/%s%d.xls", $ffn, $rpt['uid']);
+		catch (Exception $ex)
+		{
+			$rpt['genxls'] = false;
+			error_log($ex->getMessage());
+		}
 	}
 
-	$rpt['csvfn'] = sprintf("rpt/%s%d.csv", $ffn, $rpt['uid']);
-	$rpt['ff'] = fopen($rpt['csvfn'], "w");
+	if ($rpt['gencsv'])
+	{
+		$rpt['csvfn'] = sprintf("rpt/%s%d.csv", $ffn, $rpt['uid']);
+		if (($rpt['ff'] = fopen($rpt['csvfn'], "w")) === false) $rpt['gencsv'] = false;
+	}
 
 	$tita = array();
 	$titac = 0;
@@ -602,19 +844,34 @@ function ltrpt_excel_init(&$rpt)
 	{ 
 		if ($cp['hidden'] == 0) $tita[$titac++] = $cp['title'];
 	}
-	if ($titac > 0) fputcsv($rpt['ff'], $tita);
+	if ($titac > 0 && $rpt['gencsv']) fputcsv($rpt['ff'], $tita);
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Guardar archivo XLS
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_excel_save(&$rpt)
 {
 	if ($rpt['genxls'])
 	{
-		$rpt['xo']->getActiveSheet()->setTitle(substr($rpt['title'], 0, 31));
-		$objWriter = new PHPExcel_Writer_Excel5($rpt['xo']);
-		$objWriter->save($rpt['xfn']);
+		try
+		{
+			$rpt['xo']->getActiveSheet()->setTitle("Reporte");
+			$objWriter = PHPExcel_IOFactory::createWriter($rpt['xo'], 'Excel5');
+			$objWriter->save($rpt['xfn']);
+		}
+		catch (Exception $ex)
+		{
+			$rpt['genxls'] = false;
+			error_log($ex->getMessage());
+		}
 	}
 
-	fclose($rpt['ff']);
+	if ($rpt['gencsv']) fclose($rpt['ff']);
 
 	$linkyx = "";
 	$linky1 = $rpt['genxls'] ? sprintf("<a href=\"%s\">Archivo Excel</a>&nbsp;", $rpt['xfn']): "";
@@ -623,6 +880,14 @@ function ltrpt_excel_save(&$rpt)
 	return $linkyx;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Agregar celdas de XLS 
+ * @param array $rpt
+ * Matriz de reporte
+ * @param array $row
+ * Matriz de valores de la linea
+ */
 function ltrpt_excel_add(&$rpt, &$row)
 {
 	foreach ($rpt['xcp'] as $xcp)
@@ -638,6 +903,13 @@ function ltrpt_excel_add(&$rpt, &$row)
 	$rpt['xn']++;
 }
 
+/**
+ * 
+ * Emitir reporte por grupo, a partir del (sub)array interno 'ROW' del reporte. Previamente hay que llenarlo.
+ * @param array $rpt
+ * Matriz de reporte.
+ * @return string
+ */
 function ltrpt_grp_byarray(&$rpt)
 {
 	$buf = '';
@@ -666,6 +938,17 @@ function ltrpt_grp_byarray(&$rpt)
 	return $buf;
 }
 
+/**
+ * 
+ * Emitir reporte por grupo, a partir de un query SQL. El query debe ser construido externamente.
+ * @param array $rpt
+ * Matriz de reporte
+ * @param string $sparm
+ * (opcional) Parametros visible en encabezado
+ * @param string $sorden
+ * (opcional) Orden visible en encabezado
+ * @return string
+ */
 function ltrpt_grp_byquery(&$rpt, $sparm = '', $sorden = '')
 {
 	ltrpt_excel_init($rpt);
@@ -676,13 +959,19 @@ function ltrpt_grp_byquery(&$rpt, $sparm = '', $sorden = '')
 	$buf .= ltrpt_grp_query_rst($rpt);
 	for ($rpt['grpndx'] = 0; $rpt['grpndx'] < $rpt['grpcount']; $rpt['grpndx']++)
 		$buf .= ltrpt_grp_query($rpt);
-	$buf .= ltrpt_grp_byarray($rpt);
 
-	$buf .= ltrpt_excel_save($rpt);
+	$buf .= ltrpt_grp_byarray($rpt);
 		
 	return $buf;
 }
 
+/**
+ * 
+ * Emitir reporte a partir del (sub)array interno 'ROW'. Previamente hay que llenarlo. 
+ * @param array $rpt
+ * Matriz de reporte
+ * @return string
+ */
 function ltrpt_byarray(&$rpt)
 {
 	$buf = '';
@@ -703,6 +992,15 @@ function ltrpt_byarray(&$rpt)
 	return $buf;
 }
 
+/**
+ * 
+ * Emitir reporte a partir de un query SQL.
+ * @param array $rpt
+ * Matriz del reporte
+ * @param string $query
+ * Query SQL
+ * @return string
+ */
 function ltrpt_byquery(&$rpt, $query)
 {
 	$buf = '';
@@ -729,6 +1027,14 @@ function ltrpt_byquery(&$rpt, $query)
 	return $buf;
 }
 
+/**
+ * 
+ * Obsoleto. No usar.
+ * @param unknown $rpt
+ * @param unknown $query
+ * @param string $sparm
+ * @param string $sorden
+ */
 function ltrpt_query(&$rpt, $query, $sparm = '', $sorden = '')
 {
 	$rpt['sparm'] = $sparm;
@@ -736,31 +1042,44 @@ function ltrpt_query(&$rpt, $query, $sparm = '', $sorden = '')
 	echo ltrpt_byquery($rpt, $query);
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Procesa funciones internas. Obsoleto.
+ * @param unknown $fl
+ * @param unknown $row
+ */
 function ltrpt_funcs($fl, &$row)
 {
 	$cn = $fl['n'];
-	///if ($fl['src'] == '@ltrpt_rspagado')
-	///{
-	///	$doc_no = sprintf("RS%010d", $row['reservacion_id']);
-	///	$row[$cn] = cxc_aplicados_bydoc($doc_no, false);
-	///}
 	if ($fl['src'] == '@ltrpt_esapartado')
 	{
 		$row[$cn] = $row['pagado'] < $row['reserva'] ? '*': ' ';
 	}
 }
 
-function ltrpt_emitir(&$rpt, $fo)
+/**
+ * 
+ * Emite el reporte a partir de su definicion en tablas LTABLE_RPT*. Funcion interna.
+ * @param array $rpt
+ * Matriz de reporte
+ * @param lt_form $fo
+ * Contexto
+ * @return boolean
+ */
+function ltrpt_emitir(&$rpt, lt_form $fo)
 {
 	$isok = false;
 	
 	$rpt['fe'] = fecha();
 	$rpt['hr'] = hora();
-	$rpt['uid'] = $_COOKIE['uid'];
-	$rpt['pnm'] = $_COOKIE['pnm'];
+	$rpt['uid'] = $fo->uid;
+	$rpt['pnm'] = $_SESSION['pnm'];
+	$rpt['unm'] = $_SESSION['unm'];
 	$rpt_name = $rpt['rpt_name'];
 	ltrpt_excel_init($rpt);
 	$rpt['grpcount'] = 0;
+	$rpt['recrem'] = 0;
+	$rpt['header_project'] = true;
 	
 	// data source
 	$tablas = $rpt['tabla'];
@@ -773,22 +1092,6 @@ function ltrpt_emitir(&$rpt, $fo)
 		$rpt_name);
 	if (($res = mysql_query($q)) !== false)
 	{
-		/*
-		while (($row = mysql_fetch_assoc($res)) !== false)
-		{
-			if (enblanco($row['alias']))
-			{
-				$tablas .= ',' . $row['tabla2'];
-				$cond .= sprintf(" AND %s.%s=%s.%s", $row['tabla1'], $row['key1'], $row['tabla2'], $row['key2']);
-			}
-			else
-			{
-				$tablas .= sprintf(",%s AS %s", $row['tabla2'], $row['alias']);
-				$cond .= sprintf(" AND %s.%s=%s.%s", $row['tabla1'], $row['key1'], $row['alias'], $row['key2']);
-			}
-			$condc++;
-		}
-		*/
 		while (($row = mysql_fetch_assoc($res)) !== false)
 		{
 			if (enblanco($row['alias'])) 
@@ -931,7 +1234,7 @@ function ltrpt_emitir(&$rpt, $fo)
 	}
 	$campos = substr($campos, 1);
 	
-	fputcsv($rpt['ff'], $csvnmfl);
+	if ($rpt['gencsv']) fputcsv($rpt['ff'], $csvnmfl);
 	
 	$orden = '';
 	$ordss = '';
@@ -948,7 +1251,11 @@ function ltrpt_emitir(&$rpt, $fo)
 	if ($ordc > 0) $orden = 'ORDER BY ' . substr($ords, 1);
 	if ($ordc > 0) $ordss = substr($ordss, 2);
 	
-	if ($rpt['have_hlines']) $hl = " style=\"{border-bottom: 1px,solid;}\"";
+	if ($rpt['have_hlines'])
+	{ 
+		$hl = " style=\"{border-bottom: 1px solid black;}\"";
+		$hlx = 'border-bottom:1px solid black;';
+	}
 	else $hl = '';
 	
 	// build query
@@ -980,16 +1287,16 @@ function ltrpt_emitir(&$rpt, $fo)
 				foreach ($campa as $cp)
 				{
 					ltrpt_funcs($cp, $row);
-					if ($cp['hidden'] == 1)
-						continue;
 					
 					$cn = $cp['n'];
 					$vv = $row[$cn];
-					
 					if ($cp['footer_op'] != 0) {
 						$rpt['campa'][$cn]['footer_cnt']++;
 						$rpt['campa'][$cn]['footer_sum'] += $vv;
 					}
+					
+					if ($cp['hidden'] == 1) continue;
+					
 					$t = $cp['t'];
 					if ($t == 'i')
 						$vv = number_format($vv, 0, ',', '.');
@@ -1014,10 +1321,10 @@ function ltrpt_emitir(&$rpt, $fo)
 						if (strstr('cm', $t) !== false)
 							$ou .= "<td class=\"ltrptizq\"$hl>$vv</td>";
 					} else
-						$ou .= "<td style=\"" . $cp['style'] . "\"</td>";
+						$ou .= "<td style=\"" . $hlx . $cp['style'] . "\"</td>";
 				}
 				$fo->buf .= ("</tr>".$ou);
-				fputcsv($rpt['ff'], $row);
+				if ($rpt['gencsv']) fputcsv($rpt['ff'], $row);
 				$lnc++;
 				$rpt['lnrem']--;
 				if ($lnc > $rpt['lnxpag']) {
@@ -1038,11 +1345,19 @@ function ltrpt_emitir(&$rpt, $fo)
 	}
 	else $fo->qerr("LTRPT-EMITIR-5") ;
 	
-	$fo->buf .= ltrpt_excel_save($rpt);
+	if ($rpt['genxls']) $fo->buf .= ltrpt_excel_save($rpt);
 		
 	return $isok;
 }
 
+/**
+ * 
+ * Cargar definicion de reporte en tablas LTABLE_RPT*. Funcion interna.
+ * @param lt_form $fo
+ * @param string $rpt_name
+ * @param array $lt
+ * @return boolean
+ */
 function ltrpt_load($fo, $rpt_name, & $lt)
 {
 	$ok = array (false, false, false, false, false);
@@ -1057,7 +1372,8 @@ function ltrpt_load($fo, $rpt_name, & $lt)
 			$lt = $row;
 			$lt['fl0'] = 'rpt_name';
 			$lt['totalize'] = 1;
-			$lt['genxls'] = true;
+			$lt['genxls'] = $lt['gencsv'] = true;
+			$lt['header_custom'] = $lt['footer_page'] = $lt['footer_rpt'] = $lt['footer_fn'] = '';
 			
 			// parametros del reporte
 			$query = sprintf("SELECT n,t,l,pd,title,dfc,dfn,dfd,dft,dfh,dfi,dfb,dfl,dfm,ctrl_type," .
@@ -1107,6 +1423,7 @@ function ltrpt_load($fo, $rpt_name, & $lt)
 					$fl['postvar'] = $row['postvar'];
 					$fl['defop'] = $row['defop'];
 					$fl['dt_lapso'] = $row['dt_lapso'];
+					$fl['porcentaje'] = 0;
 					$fl['isup'] = 1;
 					
 					$lt['fla'][$fl['n']] = $fl;
@@ -1173,6 +1490,11 @@ function ltrpt_getorden()
 	return $elorden;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. 
+ * @return string
+ */
 function ltrpt_getfiltro()
 {
 	$elfiltro = "";
@@ -1204,6 +1526,18 @@ function ltrpt_getfiltro()
 	return $elfiltro;
 }
 
+/**
+ * 
+ * Funcion interna, no usar. Genera UI de reportes basados en tablas LTABLE_RPT*
+ * @param unknown $lta
+ * @param unknown $nuevo
+ * @param unknown $rdonly
+ * @param unknown $frmname
+ * @param unknown $accion
+ * @param unknown $jsfuncs
+ * @param unknown $esrpt
+ * @param unknown $trx
+ */
 function ltable_editar($lta, $nuevo, $rdonly, $frmname, $accion, $jsfuncs, $esrpt, &$trx)
 {
 	///$trx = '';
@@ -1391,13 +1725,13 @@ function ltable_editar($lta, $nuevo, $rdonly, $frmname, $accion, $jsfuncs, $esrp
 		{
 			$scs = 2;
 			$query = sprintf("DELETE FROM ltable_edit WHERE usuario_id=%d AND junky='%s' AND tabla='%s'",
-				$_COOKIE['uid'], $_COOKIE['junk'], $lta['tabla']);
+				$_SESSION['uid'], $_COOKIE['junk'], $lta['tabla']);
 			if (mysql_query($query) !== false)
 			{
 				foreach ($fla as $fl)
 				{
 					$query = sprintf("INSERT INTO ltable_edit SET usuario_id=%d,junky='%s',tabla='%s',n='%s',t='%s',ctrl_type=%d,v='%s'",
-						$_COOKIE['uid'], $_COOKIE['junk'], $lta['tabla'], $fl['n'], $fl['t'], $fl['ctrl_type'], $fl['t'], $fl['v']);
+						$_SESSION['uid'], $_COOKIE['junk'], $lta['tabla'], $fl['n'], $fl['t'], $fl['ctrl_type'], $fl['t'], $fl['v']);
 					if (!mysql_query($query))
 					{
 						$trx .= squeryerror(20002);
@@ -1525,7 +1859,11 @@ function ltable_blank(&$lta, $esrpt=false) // registro en blanco
 	foreach ($fla as $fl)
 	{
 		$vv = $fl['df'];
-		ltable_autovar($fl, $vv);
+		if ($fl['autovar'])
+		{ 
+			$vv = autovar($fl['n'], $vv);	
+			error_log('AUTOV='.$vv);
+		}
 		if ($fl['t'] == 'd' && $fl['dt_auto'] >= 1)
 		{
 			$vv = strftime("%d/%m/%Y", time());
@@ -1554,30 +1892,13 @@ function ltable_blank(&$lta, $esrpt=false) // registro en blanco
 	}
 }
 
-function ltable_autovar($fl, &$vv)
-{
-	$nc = $fl['n'];
-	if ($fl['autovar'])
-	{
-		if ($nc == 'uid')
-		{
-			$vv = $_COOKIE['uid'];
-		}
-		if ($nc == 'proyecto_id')
-		{
-			$vv = $_COOKIE['pid'];
-		}
-		if ($nc == 'ipaddr')
-		{
-			$vv = $_SERVER['REMOTE_ADDR'];
-		}
-	}
-	if ($fl['postvar'] == 1)
-	{
-		if (isset($_POST[$nc])) $vv = $_POST[$nc];
-	}
-}
-
+/**
+ * 
+ * Funcion interna, no usar.
+ * @param unknown $fl
+ * @param unknown $nop
+ * @return string
+ */
 function lt_operador($fl, $nop)
 {
 	$lns = '';
@@ -1601,6 +1922,14 @@ function lt_operador($fl, $nop)
 	return $lns;
 }
 
+/**
+ * 
+ * Funcion interna, no usar.
+ * @param unknown $corre
+ * @param unknown $campo
+ * @param unknown $descr
+ * @return string
+ */
 function ltrpt_orden_add($corre, $campo, $descr)
 {
     $buf = '';
@@ -1626,6 +1955,12 @@ function ltrpt_disp_add($corre, $campo, $descr)
     return $buf;
 }
 
+/**
+ * 
+ * Funcion interna, no usar.
+ * @param unknown $fl
+ * @return string
+ */
 function lt_validfn($fl)
 {
 	$sval = '';
@@ -1639,6 +1974,12 @@ function lt_validfn($fl)
 	return $sval;
 }
 
+/**
+ * 
+ * Funcion interna, no usar.
+ * @param unknown $fl
+ * @return string
+ */
 function lt_onkeyfn(&$fl)
 {
 	$fn2 = "";
@@ -1657,6 +1998,12 @@ function lt_onkeyfn(&$fl)
 	return $fn;
 }
 
+/**
+ * 
+ * Funcion interna, no usar
+ * @param unknown $fl
+ * @return string
+ */
 function ltable_edit_ls(&$fl)
 {
 	$lati = '';
@@ -1704,7 +2051,8 @@ function ltable_edit_ls(&$fl)
 			{
 				if ($fl['v'] == $row[$flkey]) $lati .= sprintf("<option value=\"%s\"%s>%s</option>", $row[$flkey], $issel, $sdesc);
 			}
-			else $lati .= sprintf("<option value=\"%s\"%s>%s</option>", $row[$flkey], $issel, $sdesc);
+			else 
+			$lati .= sprintf("<option value=\"%s\"%s>%s</option>", $row[$flkey], $issel, $sdesc);
 		}
 		$lati .= "</select>";
 		mysql_free_result($res);

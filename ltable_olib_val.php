@@ -1,229 +1,13 @@
 <?php
-require_once "ltable_olib.php";
-require_once "cxc_depdup.php";
-
-function pemx($fl, $errormsg, $fo)
-{
-	$fo->parc(sprintf("Campo <b>%s</b> (<u>%s</u>) <i>%s</i></p>",
-		$fl->title, $fl->text, $errormsg));
-}
-
-function lt_telefono($fl, $force = false, $fo)
-{
-	$isok = false;
-	if (enblanco($fl->text))
-	{
-		if ($force) pemx($fl, "est&aacute; en blanco.", $fo);
-		else $isok = true;
-	}
-	else
-	{
-		if (preg_match("/^([0-9]{4}[\\s\\-]?)?([0-9]{7}){1}$/", $fl->text) == 1)
-			$isok = true;
-		else
-		{
-			pemx($fl, 'debe tener siete u once digitos: 999999 o 99999999999', $fo);
-		}
-	}
-	return $isok;
-}
-
-function lt_numletra($fl, $fo)
-{
-	$isok = false;
-	if (preg_match("/^[0-9a-zA-Z\s.,:;_\-]+$/", $fl->text) == 1)
-	{
-		$isok = true;
-	}
-	else
-	{
-		pemx($fl, 'debe contener solo numeros, letras y signos de puntuaci&oacute;n.', $fo);
-	}
-	return $isok;
-}
-
-function lt_fecha($fl, $fo)
-{
-	$isok = false;
-	$tmpfe = ctod($fl->text);
-	if (fecha_valida($tmpfe)) $isok = true;
-	else pemx($fl, 'es una fecha inv&aacute;lida.', $fo);
-	
-	return $isok;
-}
-
-function lt_digitos($fl, $ndig, $oblig = false, $fo)
-{
-	$isok = false;
-	if (enblanco($fl->text))
-	{
-		if ($oblig) pemx($fl, 'en blanco.', $fo);
-		else $isok = true;
-	}
-	else
-	{
-		if (preg_match("/^[0-9]{" . $ndig . "}$/", $fl->text) == 1)
-		{
-			$isok = true;
-		}
-		else pemx($fl, "debe contener $ndig digitos exactamente.", $fo);
-	}
-	return $isok;
-}
-
-function lt_entero($fl, $minval, $maxval, $fo)
-{
-	$isok = false;
-	if (preg_match("/^[0-9]+$/", $fl->text) == 1)
-	{
-		$ivalor = intval($fl->text);
-		if ($ivalor >= $minval && $ivalor <= $maxval)
-		{
-			$isok = true;
-		}
-		else pemx($fl, "debe ser mayor igual que $minval y menor igual que $maxval", $fo);
-	}
-	else pemx($fl, 'solo debe contener digitos numericos.', $fo);
-
-	return $isok;
-}
-
-function lt_numerico($fl, $ndec, $minval, $maxval, $fo)
-{
-	$isok = false;
-	$exp = "/^-?[0-9.]{1,}([,]?[0-9]{0,$ndec}){0,1}$/";  // FMT:ES
-	//$exp = "/^-?[0-9]{1,}([.]?[0-9]{0,$ndec}){0,1}$/"; // FMT:EN
-	
-	if (preg_match($exp, $fl->text) == 1)
-	{
-		$snum = floatval(nen($fl->text));
-		$minval = floor($minval);
-		if ($snum <= $maxval)
-		{
-			if ($snum >= $minval)
-			{
-				$isok = true;
-			}
-			else pemx($fl, "Debe ser mayor igual a: <b>$minval</b> Valor actual: <b>$snum</b>", $fo);
-		}
-		else pemx($fl, "Debe ser menor igual a: <b>$maxval</b> Valor actual: <b>$snum</b>", $fo);
-	}
-	else pemx($fl, "N&uacute;mero mal escrito.", $fo);
-	
-	return $isok;
-}
-
-function lt_novacio($fl, $fo)
-{
-	$isok = !enblanco($fl->text);
-	if (!$isok) pemx($fl, 'est&aacute; en blanco', $fo);
-	return $isok;
-}
-
-function lt_forbidden($fl, $fo)
-{
-	$isok = false;
-	if (enblanco($fl->text))
-	{
-		$isok = true;
-	}
-	else
-	{
-		$fmt = "/['\"]+/";
-		if (preg_match($fmt, $fl->text) == 0)
-		{
-			$isok = true;
-		}
-		else pemx($fl, "Contiene caracteres no permitidos como comillas.", $fo);
-	}
-	return $isok;
-}
-
-function lt_email($campo, $fo)
-{
-	$isok = false;
-	if (enblanco($campo->text)) $isok = true;
-	else
-	{
-		if (preg_match("/^[0-9a-zA-Z._]+[@]{1}" .
-			"[0-9a-zA-Z]+[.]{1}[a-zA-Z]{2,4}([.]{1}[a-zA-Z]{2})?$/", $campo->text) == 1)
-		{
-			$isok = true;
-		}
-		else
-		{
-			pemx($campo, 'no es v&aacute;lido.', $fo);
-		}
-	}
-	return $isok;
-}
-
-function lt_rif($fl, $fo)
-{
-	$isok = false;
-	if (preg_match("/^[vVjJ]{1}[\-]{1}[0-9]{8}[\-]{1}[0-9]{1}$/", $fl->text) == 1)
-	{
-		$isok = true;
-	}
-	else
-	{
-		pemx($fl, 'debe estar en el formato [J|V]-99999999-9', $fo);
-	}
-	return $isok;
-}
-
-function ltv_dummy($fo)
-{
-	return true;
-}
+require_once RUTA_LT."ltable_olib.php";
+require_once RUTA_LT."cxc_depdup.php";
+require_once RUTA_LT.'ltable_olib_val_fn.php';
 
 function lt_local_cid($fl, $fo)
 {
 	$isok = false;
-	if (preg_match("/^[A-Z0-9]+$/", $fl->text) == 1) $isok = true;
-	else pemx($fl, 'solo se permiten letras y numeros.', $fo);
-	
-	return $isok;
-}
-
-function lt_cheque($fl, $oblig = false, $fo)
-{
-	$isok = false;
-
-	if (enblanco($fl->text))
-	{
-		if ($oblig) pemx($fl, 'en blanco', $fo);
-		else $isok = true;
-	}
-	else
-	{
-		if (preg_match("/^[0-9]{8}$/", $fl->text) == 1)
-		{
-			$isok = true;
-		}
-		else pemx($fl, 'debe contener 8 digitos exactamente.', $fo);
-	}
-	
-	return $isok;
-}
-
-function lt_deposito($fl, $oblig = false, $fo)
-{
-	$isok = false;
-
-	if (enblanco($fl->text))
-	{
-		if ($oblig) pemx($fl, 'en blanco', $fo);
-		else $isok = true;
-	}
-	else
-	{
-		if (preg_match("/^[0-9]{12}$/", $fl->text) == 1)
-		{
-			$isok = true;
-		}
-		else pemx($fl, 'debe contener 12 digitos exactamente.', $fo);
-	}
+	if (preg_match("/^[A-Z0-9\-]+$/", $fl->text) == 1) $isok = true;
+	else pemx($fl, 'solo se permiten letras y numeros y guiones.', $fo);
 	
 	return $isok;
 }
@@ -250,7 +34,7 @@ function lt_juridico($lto, $fo)
 		$ok[3] = lt_entero($lto->fa['repreci'], 1, 99999999, $fo);
 		$ok[4] = lt_numletra($lto->fa['reg_cargo'], $fo);
 		$ok[5] = lt_numletra($lto->fa['reg_tal'], $fo);
-		$ok[6] = lt_fecha($lto->fa['reg_fecha'], $fo);
+		$ok[6] = lt_valfecha($lto->fa['reg_fecha'], $fo);
 		$ok[7] = lt_entero($lto->fa['reg_numero'], 1, 999, $fo);
 		$ok[8] = lt_numletra($lto->fa['reg_tomo'], $fo);
 		$isok = ($ok[0] && $ok[1] && $ok[2] && $ok[3] && $ok[4] && $ok[5] && $ok[6] && $ok[7] && $ok[8]);
@@ -313,7 +97,6 @@ function ltv_cuentas(ltable $lto, lt_form $fo)
 	$ok[0] = lt_digitos($lto->fa['numero'], 20, true, $fo);
 	$ok[1] = lt_forbidden($lto->fa['titular'], $fo);
 	$ok[2] = false;
-
 	/*if (aclcheck($fo, 30, 3) >= 1)
 	{
 		$ok[2] = true;
@@ -329,13 +112,13 @@ function ltv_locales($lto, $fo)
 	$ok = array (0 => false, false, false, false, false, false, false, false, false, false);
 
 	$ok[0] = lt_local_cid($lto->fa['local_cid'], $fo);
-	$ok[1] = lt_numerico($lto->fa['area'], 2, 1, 100, $fo);
+	$ok[1] = lt_numerico($lto->fa['area'], 3, 0, 999, $fo);
 	$ok[2] = lt_numerico($lto->fa['tolera'], 2, 0, 2, $fo);
-	$ok[3] = lt_numerico($lto->fa['prxm2'], 2, 1000, 100000, $fo);
+	$ok[3] = lt_numerico($lto->fa['prxm2'], 2, 0, 9999999, $fo);
 	$precio = nen($lto->fa['area']->text) * nen($lto->fa['prxm2']->text);
 	$inicial = $precio * (nen($lto->fa['inicial_porc']->text) / 100);
 	$reserva = $inicial * (nen($lto->fa['reserva_porc']->text) / 100);
-	$ok[4] = lt_numerico($lto->fa['precio'], 2, $precio, 10000000, $fo);
+	$ok[4] = lt_numerico($lto->fa['precio'], 2, $precio, 99999999, $fo);
 	if ($ok[4])
 	{
 		$elprecio = nen($lto->fa['precio']->text);
@@ -435,7 +218,7 @@ function ltv_reservaciones($lto, $fo)
 {
 	$ok = array (0 => false, false, false, false, false, false, false, false, false, false);
 
-	$ok[0] = lt_fecha($lto->fa['fecha'], $fo);
+	$ok[0] = lt_valfecha($lto->fa['fecha'], $fo);
 	$ok[0] = true;
 	$ok[1] = lt_cheque($lto->fa['cheque_no0'], false, $fo);
 	$ok[2] = lt_cheque($lto->fa['cheque_no1'], false, $fo);
@@ -479,7 +262,8 @@ function ltv_contratos($lto, $fo)
 	$ok[2] = lt_resid($lto->fa['reservacion_id'], $fo);
 	$suma = nen($lto->fa['sumapagos']->text);
 	$reserva = nen($lto->fa['reserva']->text);
-	if ($suma < 0)
+	$precio = nen($lto->fa['precio']->text);
+	if ($reserva < $precio && $suma < -1)
 	{
 		$fo->parc("El monto pagado (<b>Bs.F. $suma</b>) " .
 			"es menor al monto de la reserva (<b>Bs.F. $reserva</b>).");
@@ -498,7 +282,7 @@ function ltv_depositos($lto, $fo)
 	$isok = false;
 	
 	$ok[0] = lt_digitos($lto->fa['dep_no'], 12, true, $fo);
-	$ok[1] = lt_fecha($lto->fa['dep_fe'], $fo);
+	$ok[1] = lt_valfecha($lto->fa['dep_fe'], $fo);
 	$ok[2] = lt_forbidden($lto->fa['observ'], $fo);
 
 	if ($ok[0] && $ok[1] && $ok[2])
@@ -590,7 +374,7 @@ function ltv_parroquias($lto, $fo)
 
 function ltv_dolar($lto, $fo)
 {
-	$ok[0] = lt_fecha($lto->fa['fecha'], $fo);
+	$ok[0] = lt_valfecha($lto->fa['fecha'], $fo);
 	$ok[1] = lt_numerico($lto->fa['monto'], 2, 0, 99999, $fo);
 	$ok[2] = lt_forbidden($lto->fa['fuente'], $fo);
 	
@@ -611,7 +395,7 @@ function ltv_cxcentregas($lto, $fo)
 {
 	$ok[0] = lt_forbidden($lto->fa['doc_no'], $fo);
 	$ok[1] = lt_forbidden($lto->fa['observ'], $fo);
-	$ok[2] = lt_fecha($lto->fa['fecha'], $fo);
+	$ok[2] = lt_valfecha($lto->fa['fecha'], $fo);
 	$ok[3] = lt_forbidden($lto->fa['otro_nombres'], $fo);
 	$ok[4] = lt_forbidden($lto->fa['otro_apellidos'], $fo);
 	$ok[5] = lt_entero($lto->fa['otro_ci'], 1, 999999999, $fo);
@@ -622,7 +406,6 @@ function ltv_cxcentregas($lto, $fo)
 function ltv_consus($lto, $fo)
 {
 	$ok[0] = lt_novacio($lto->fa['local_cid'], $fo);
-	
 	return $ok[0];	
 }
 
@@ -630,6 +413,135 @@ function ltv_ciudades($lto, $fo)
 {
 	$ok[0] = lt_novacio($lto->fa['nombre'], $fo);
 	$ok[1] = lt_digitos($lto->fa['codtel'], 4, $fo);
+	return $ok[0] && $ok[1];
+}
+
+function validar_caracteristica($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	$ok[1] = lt_novacio($lto->fa['descripcion_ingles'], $fo);
+	return $ok[0] && $ok[1]; 
+}
+
+function validar_almacen($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	return $ok[0];
+}
+
+function validar_almacenes_tipos($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	return $ok[0];
+}
+
+function  validar_tiendas($lto, $fo)
+{
+	
+	$ok[0] = lt_novacio($lto->fa['nombre'], $fo);
+	$ok[1] = lt_novacio($lto->fa['suc_id'], $fo);
+	$ok[3] = lt_novacio($lto->fa['direccion'], $fo);
+	$ok[4] = lt_entero($lto->fa['suc_id'], 001, 999, $fo);
+	return $ok[0] && $ok[1]  && $ok[3] && $ok[4] ;
+}
+
+function  validar_productos_familas($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);	
+	return $ok[0];
+}
+
+function  validar_productos_marcas($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	return $ok[0];
+}
+
+function  validar_productos_modelos($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	//$ok[1] = lt_entero($lto->fa['codigo'], 0, 99, $fo);
+	return $ok[0] /*&& $ok[1]*/;
+}
+
+function  validar_productos_status($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	return $ok[0];
+}
+
+function  validar_productos($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['fi_codigo_prod'], $fo);
+	
+	/*$ok[1] = lt_numerico($lto->fa['peso'], 2, 0, 99999, $fo);
+	$ok[2] = lt_numerico($lto->fa['volumen'], 2, 0, 99999, $fo);
+	$ok[3] = lt_numerico($lto->fa['alto'], 2, 0, 99999, $fo);
+	$ok[4] = lt_numerico($lto->fa['largo'], 2, 0, 99999, $fo);
+	$ok[5] = lt_numerico($lto->fa['ancho'], 2, 0, 99999, $fo);*/
+	
+	$ok[6] = lt_novacio($lto->fa['cod_adux'], $fo);
+
+	$ok[13] = lt_numerico($lto->fa['minimo'], 2, 0, 99999, $fo);
+	$ok[14] = lt_numerico($lto->fa['maximo'], 2, 0, 99999, $fo);
+
+	return $ok[6] && $ok[13] &&  $ok[14] ;
+}
+
+function  validar_asignaciones_usos($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+
+	return $ok[0];
+}
+
+function  validar_asignacion($lto, $fo)
+{
+	/*$ok[0] = lt_novacio($lto->fa['serial'], $fo);
+	$ok[1] = lt_novacio($lto->fa['codigo_interno'], $fo);*/
+	$ok[2] = lt_entero($lto->fa['cantidad'], 1, 999, $fo);
+	$ok[3] = lt_novacio($lto->fa['ubicacion'], $fo);
+	$ok[4] = lt_novacio($lto->fa['observ'], $fo);
+	
+	return /*$ok[0] &&  $ok[1] &&*/  $ok[2] &&  $ok[3] &&  $ok[4];
+}
+
+function  validar_color($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	return $ok[0];
+}
+
+function  validar_variantes($lto, $fo)
+{
+	$ok[0] = lt_novacio($lto->fa['codigo'], $fo);
+	$ok[1] = lt_novacio($lto->fa['descripcion'], $fo);
+	return $ok[0] && $ok[1];
+}
+
+/*function validar_cajachica($lto, $fo){
+	
+	$ok[0] = lt_novacio($lto->fa['descripcion'], $fo);
+	$ok[1] = lt_novacio($lto->fa['fondo_fijo'], $fo);
+	$ok[2] = lt_novacio($lto->fa['cajachica_abrev'], $fo);
+	return $ok[0] && $ok[1] && $ok[2];	
+}*/
+
+function validar_proveedores($lto, $fo){
+
+	$ok[0] = lt_novacio($lto->fa['nombre'], $fo);
+	$ok[1] = lt_novacio($lto->fa['direccion'], $fo);
+	$ok[2] = lt_telefono_int($lto->fa['telefono'], false, $fo);
+	$ok[3] = lt_telefono_int($lto->fa['telefono2'], false, $fo);
+	$ok[4] = lt_novacio($lto->fa['contacto'], $fo);
+	$ok[5] = lt_email($lto->fa['email'], $fo);
+	$ok[6] = lt_email($lto->fa['email2'], $fo);
+	$ok[7] = lt_telefono_int($lto->fa['contacto_telno'], false, $fo);
+	$ok[8] = lt_email($lto->fa['contacto_email'], $fo);
+	//$ok[9] = lt_novacio($lto->fa['codigo'], $fo);
+	//$ok[10] = lt_novacio($lto->fa['direccionMandarin'], $fo);
+	//$ok[11] = lt_novacio($lto->fa['idalibaba'], $fo);
+	//$ok[12] = lt_novacio($lto->fa['codfinalprov'], $fo);
 	
 	return $ok[0] && $ok[1];
 }
@@ -674,8 +586,28 @@ function lto_validate($lto, $fo=false)
 	if ($lto->tabla == 'remodel_cargos') $isok = true;
 	if ($lto->tabla == 'remodel_tipos') $isok = true;
 	if ($lto->tabla == 'remodel_und') $isok = true;
+	if ($lto->tabla == 'productos') $isok = validar_productos($lto, $fo);	
+	if ($lto->tabla == 'maquinas') $isok = true;
+	if ($lto->tabla == 'caracteristicas') $isok = validar_caracteristica($lto, $fo);
+	if ($lto->tabla == 'almacenes') $isok = validar_almacen($lto, $fo);
+	if ($lto->tabla == 'almacenes_tipos') $isok = validar_almacenes_tipos($lto, $fo);
+	if ($lto->tabla == 'tiendas') $isok = validar_tiendas($lto, $fo);
+	//if ($lto->tabla == 'productos_barcodes') $isok = true;
+	if ($lto->tabla == 'productos_familias') $isok = validar_productos_familas($lto, $fo);
+	if ($lto->tabla == 'productos_marcas') $isok = validar_productos_marcas($lto, $fo);
+	if ($lto->tabla == 'productos_modelos') $isok = validar_productos_modelos($lto, $fo);
+	if ($lto->tabla == 'productos_status') $isok = validar_productos_status($lto, $fo);
+	if ($lto->tabla == 'inv_asignaciones_usos') $isok = validar_asignaciones_usos($lto, $fo);
+	if ($lto->tabla == 'inv_asignaciones') $isok = validar_asignacion($lto, $fo);
+	if ($lto->tabla == 'color') $isok = validar_color($lto, $fo);
+	if ($lto->tabla == 'productos_variantes') $isok = validar_variantes($lto, $fo);
+	//if ($lto->tabla == 'cajachica') $isok = validar_cajachica($lto, $fo);
+	if ($lto->tabla == 'proveedores') $isok = validar_proveedores($lto, $fo);
 	
-	if (strpos("canales,destinos,operadoras,paises,planes,cl_clientes,extensiones,inet_usuarios", $lto->tabla) !== false) $isok = true;
+	if (strpos("canales,destinos,operadoras,paises,planes,cl_clientes,extensiones,".
+			"inet_usuarios,ventasdesdeusa_pr,vendedores,prefactura_ccmachine,prefactura_series,tiendas_cl,".
+			"notificaciones_usrcta,notificaciones_usrcta_tp,prefactura_tpu,vendedores_cp,ml_cuentas,publicaciones,empleados".
+			"ml_publicaciones,plantillas,publicaciones_ml,zonas,cond_propietarios", $lto->tabla) !== false) $isok = true;
 
 	if ($isok) $fo->ok("Datos validados");
 	else $fo->err("LTVAL-1", "Favor verifique los campos especificados");

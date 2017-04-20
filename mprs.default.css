@@ -1,0 +1,9 @@
+body {margin-left: 1%; margin-right: 1%; color: black; background: white; font-family: verdana; font-size: 10pt;}
+table {font-size: 10pt; font-family: verdana; border-collapse: auto;}
+td.tdmain0 {background:rgb(230,230,230);border:1px solid black;}
+td.tdmain1 {background:white;border:1px solid black;}
+#pw99 {color: white; background-color: white;}
+table.lgrid {padding: 2%; margin-left: auto; margin-right: auto;}
+th.lgrid {border-width: thick;}
+td.lgrid {border-width: thin;}
+

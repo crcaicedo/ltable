@@ -1,15 +1,16 @@
+var ltform_msgTO;
+var ltform_msgIST=0;
+var alertxTO;
 function enfocar(elobjs)
 {
 	document.getElementById(elobjs).focus();
 }
-
 function alertx(elobj, smsg)
 {
 	var ns = elobj.name;
 	alert(smsg);
-	setTimeout("enfocar('" + ns + "')", 50);
+	alertxTO = setTimeout("enfocar('" + ns + "')", 50);
 }
-
 function lt_numen(nv)
 {
     var sv = nv.toString();
@@ -145,6 +146,40 @@ function lt_telefono(otb,forced)
     }
     return isok;
 }
+function lt_telefono_int(otb,forced)
+{
+    var isok = false;
+    var re = /^((00|\+){1}[0-9]{2,3}[\s\-]?)?([0-9]{2,4}[\s\-]?)?([0-9]{6,10}){1}$/;
+    if (!otb.readOnly && !otb.disabled)
+    {
+    	if (lt_vacio(otb))
+    	{
+    		if (forced)
+    		{
+    			alertx(otb, "Telefono en blanco");
+    			//otb.focus();
+    		}
+    		else
+    		{
+    			isok = true;
+    		}
+    	}
+    	else
+    	{
+    		isok = re.test(otb.value);
+    		if (!isok)
+    		{
+    			alertx(otb, "Telefono debe tener formato correcto, nacional o internacional");
+    			//otb.focus();
+    		}
+    	}
+    }
+    else
+    {
+    	isok = true;
+    }
+    return isok;
+}
 function lt_numero(otb)
 {
 	var isok = true;
@@ -241,6 +276,7 @@ function lt_entero(otb,ndig,vmin,vmax)
 {
     var isok = false;
     var re = new RegExp("^[0-9]{1,"+ndig+"}$");
+   
     if (re.test(otb.value))
     {
     	var valor = Number(otb.value);
@@ -261,23 +297,50 @@ function lt_entero(otb,ndig,vmin,vmax)
     }
     return isok;
 }
+function lt_cedula(otb)
+{
+	return lt_entero(otb, 9, 1, 999999999);
+}
 function lt_largo(otb,minimo,maximo)
 {
-    var isok = true;
+    var isok = false;
     var re = /^\s{1,}$/g;
     if (otb.value.search(re) > -1)
     {
-    	isok = false;
     	alertx(otb, "El campo no debe estar en blanco");
-    	//otb.focus();
     }
     else
     {
-    	if ((otb.value.length < minimo) || (otb.value.length > maximo))
-    	{
-    		isok = false;
+        var re = new RegExp("^.{"+minimo+","+maximo+"}$");
+        if (re.test(otb.value))
+        {
+    		isok = true;
+        }
+        else
+        {
     		alertx(otb, "Largo del campo es invalido.\nMinimo: " + minimo + " caracteres.\nMaximo: " + maximo + " caracteres.");
-    		//otb.focus();
+    	}
+    }
+    return isok;
+}
+function lt_largo_fijo(otb,largo)
+{
+    var isok = false;
+    var re = /^\s{1,}$/g;
+    if (otb.value.search(re) > -1)
+    {
+    	alertx(otb, "El campo no debe estar en blanco");
+    }
+    else
+    {
+        var re = new RegExp("^.{"+largo+"}$");
+        if (re.test(otb.value))
+        {
+    		isok = true;
+        }
+        else
+        {
+    		alertx(otb, "Largo del campo debe ser " + largo + " caracteres.");
     	}
     }
     return isok;
@@ -316,11 +379,11 @@ function lt_numletra(otb)
 function lt_rif(otb)
 {
     var isok = false;
-    var re = new RegExp("^[vVjJEe]{1}[\\-]{1}[0-9]{8}[\\-]{1}[0-9]{1}$");
+    var re = new RegExp("^[vVjJEeGg]{1}[\\-]{1}[0-9]{8}[\\-]{1}[0-9]{1}$");
 
     if (!re.test(otb.value))
     {
-    	alertx(otb, "RIF debe estar en el formato [J|V|E]-99999999-9");
+    	alertx(otb, "RIF debe estar en el formato [J|V|E|G]-99999999-9");
     	//otb.focus();
     }
     else
@@ -408,7 +471,7 @@ function ultimo()
 function fecha()
 {
 	var lafe = new Date();
-	this.d = lafe.getDay() + 1;
+	this.d = lafe.getDate();
 	this.m = lafe.getMonth() + 1;
 	this.a = lafe.getFullYear();
 	this.ctod = ctod;
@@ -443,6 +506,17 @@ function lt_chkfecha(otb)
 			else alertx(otb, "Mes fuera de rango [1..12] -> " + tmpfe.m);
 		}
 		else alertx(otb, "Agno fuera de rango [1901..2030] -> " + tmpfe.a);
+	}
+	return isok;
+}
+
+function lt_chkhora(otb)
+{
+	var isok = false;
+	var re = new RegExp("^([0-1]?[0-9]|2[0-4]):([0-5][0-9])(:[0-5][0-9])?$");
+	if (!(isok = re.test(otb.value)))
+	{
+		alertx(otb, "Introduzca una hora valida HH:MM[:SS]");
 	}
 	return isok;
 }
@@ -625,43 +699,14 @@ function lt_parserecord(apar,resa,nfields)
 function lt_vallocal_cid(elobj)
 {
 	var isok = false;
-	if (document.getElementById("nuevo").value == 1)
+	if ($("nuevo").value == 1)
 	{
 		if (lt_novaciox(elobj))
 		{
-			var local_cid = elobj.value.toUpperCase();
-			elobj.value = local_cid;
-			var pryid = document.getElementById("proyecto_id").value;
-			var q1 = "SELECT+COUNT(*)+FROM+locales+WHERE+local_cid='" + elobj.value + "'+AND+proyecto_id=" + pryid;
-			var xmlHttp = ajaxCreate();
-			if (xmlHttp !== null)
-			{
-				xmlHttp.open("GET","ltable_rquery.php?nq=1&q0="+q1,false);
-				xmlHttp.send(null);
-				if(xmlHttp.status == 200 || xmlHttp.status == 304)
-				{
-					var apar = new Array();
-					var resa = new Array();
-					apar[0] = xmlHttp.responseText;
-					nr = lt_parserecord(apar,resa,1);
-					if (nr > 0)
-					{
-						if (Number(resa[0][0]) > 0)
-						{
-							alert(elobj, "Numero de local ya esta usado, por favor use otro.");
-							//elobj.focus();
-						}
-						else
-						{
-							isok = true;
-						}
-					}
-					else
-					{
-						alert("Error: " + resa[0][0]);
-					}
-				}
-			}
+			var qq = "locales_valcid.php?local_cid="+elobj.value;
+			var ajax = new Ajax.Request(qq, {asynchronous:false, method:'get'});
+			var response = new Ajax.Response(ajax);
+			if (ajax.success()) isok = true; else ltform_msg(response.responseJSON.msg, 10, 0);			
 		}
 	}
 	else
@@ -1213,10 +1258,10 @@ function lt_initpryid(elobj)
 function lt_valprxm2(elobj)
 {
     var isok = false;
-    if (lt_numerico(elobj,5,2,1,99999))
+    if (lt_numerico(elobj,5,2,0,999999))
     {
-	if (document.getElementById("validando").value == 1) lt_calcprxm2(true); else lt_calcprxm2(false);
-	isok = true;
+    	if (document.getElementById("validando").value == 1) lt_calcprxm2(true); else lt_calcprxm2(false);
+    	isok = true;
     }
     return isok;
 }
@@ -1233,7 +1278,7 @@ function lt_vallocclase(elobj)
 function lt_valinicial(elobj)
 {
     var isok = false;
-    if (lt_numerico(elobj,7,2,0,9999999))
+    if (lt_numerico(elobj,7,2,0,99999999))
     {
 	lt_calcinicial(true);
 	if (document.getElementById("validando").value == 1) lt_calcres(true); else lt_calcres(false);
@@ -1245,7 +1290,7 @@ function lt_valinicial(elobj)
 function lt_valreserva(elobj)
 {
     var isok = false;
-    if (lt_numerico(elobj,7,2,0,9999999))
+    if (lt_numerico(elobj,7,2,0,99999999))
     {
 	lt_calcres(true);
 	lt_calccuo_mon();
@@ -1255,13 +1300,13 @@ function lt_valreserva(elobj)
 }
 function lt_valarea(elobj)
 {
-    var isok = false;
-    if (lt_numerico(elobj,3,2,1,100))
-    {
-	if (document.getElementById("validando").value == 1) lt_localprecio(true); else lt_localprecio(false);
-	isok = true;
-    }
-    return isok;
+	var isok = false;
+	if (lt_numerico(elobj,3,3,0,999))
+	{
+		if (document.getElementById("validando").value == 1) lt_localprecio(true); else lt_localprecio(false);
+		isok = true;
+	}
+	return isok;
 }
 function lt_valcuocant(elobj)
 {
@@ -1925,13 +1970,13 @@ function pagos_codcuatro(elobj, codcuatro)
 function lt_tarjeta(otb)
 {
     var isok = false;
-    var re = new RegExp("^[0-9]{10}$");
+    var re = new RegExp("^[0-9]{13}$");
 
     isok = re.test(otb.value);
     if (!isok)
     {
-    	alertx(otb, "Deben ser 10 digitos numericos: LOS ULTIMOS 4 DIGITOS "+
-    		"DE LA TARJETA Y LUEGO LOS 6 DIGITOS DEL NUMERO DE REFERENCIA DEL RECIBO");
+    	alertx(otb, "Deben ser 13 digitos numericos: LOS ULTIMOS 4 DIGITOS "+
+    		"DE LA TARJETA, LUEGO LOS 6 DIGITOS DE LA APROBACION Y LUEGO LOS 3 DIGITOS DEL LOTE");
     }
     return isok;
 }
@@ -1951,19 +1996,38 @@ function lt_downlight(elobj, elcolor)
 
 function ltpry_choose(elobj)
 {
-	var pid = document.getElementById("mprsglobalpid").value;
-	var pet = "proyecto_chooser_up.php?pid=" + pid;
-
-	var xmlHttp = ajaxCreate();
-	if (xmlHttp !== null)
+	var qq = "proyecto_chooser_up.php?newpid=" + elobj.value;
+    new Ajax.Request(qq,
 	{
-		xmlHttp.open("GET", pet, false);
-		xmlHttp.send(null);
-		if(xmlHttp.status == 200 || xmlHttp.status == 304)
-		{
+    	method: 'get',
+    	onSuccess: function(request)
+    	{
 			document.location.reload();
-		}
-	}
+    	},
+    	onFailure: function(request)
+    	{
+    		ltform_msg(request.responseJSON.msg, 10, 0);
+    	}
+	});	
+    return true;
+}
+
+function lttnd_choose(elobj)
+{
+	var qq = "tienda_chooser_up.php?newtid=" + elobj.value;
+    new Ajax.Request(qq,
+	{
+    	method: 'get',
+    	onSuccess: function(request)
+    	{
+			document.location.reload();
+    	},
+    	onFailure: function(request)
+    	{
+    		ltform_msg(request.responseJSON.msg, 10, 0);
+    	}
+	});	
+    return true;
 }
 
 function rpt_lcid(elobj)
@@ -2025,23 +2089,16 @@ function rpt_klidx(elobj, e, listaname, nextname)
 	return isok;
 }
 
+function lt_theme_change_pp(bRe, oRe)
+{
+	if (bRe) document.location.reload(); else ltform_msg(oRe.msg, 10, 0);
+}
+
 function lt_theme_change(elobj)
 {
 	var tema = $("nvotema").value;
 	var pet = "ltable_theme_up.php?nvotema=" + tema;
-
-	var xmlHttp = ajaxCreate();
-	if (xmlHttp !== null)
-	{
-		xmlHttp.open("GET", pet, false);
-		xmlHttp.send(null);
-		if(xmlHttp.status == 200 || xmlHttp.status == 304)
-		{
-			//document.cookie = "tema" + "=" + escape(tema) +
-			//";expires=0;path=/";
-			document.location.reload();
-		}
-	}
+	lt_ajaxx(pet, lt_theme_change_pp);
 }
 
 function lt_spinner_up(sTxt, nMax, nMin, nStep, cTipo)
@@ -2098,6 +2155,8 @@ function favoritas_del(elid)
 
 function ltform_msg_hide(bReload, sObj, sURL)
 {
+	window.clearTimeout(ltform_msgTO);
+	ltform_msgIST = 0;
 	$('ltform_msg_p').style.visibility = "hidden";
 	$('ltform_msg').style.visibility = "hidden";
 	if (bReload == 1) 
@@ -2114,17 +2173,20 @@ function ltform_msg(elhtml, nSegs, bReload, sObj, sURL)
 	$('ltform_msg_p').style.visibility = "visible";
 	if (nSegs > 0)
 	{
+		if (ltform_msgIST == 1) window.clearTimeout(ltform_msgTO);
 		var nTimeout = nSegs * 1000;
 		if (sObj != null)
 		{
 			if (sURL != null)
 			{
-				window.setTimeout('ltform_msg_hide(' + bReload + ",'" + 
+				ltform_msgIST = 1;
+				ltform_msgTO = window.setTimeout('ltform_msg_hide(' + bReload + ",'" + 
 					sObj + "','" + sURL + "')", nTimeout);
 			}
 			else
 			{
-				window.setTimeout('ltform_msg_hide(' + bReload + ",'" + 
+				ltform_msgIST = 1;
+				ltform_msgTO = window.setTimeout('ltform_msg_hide(' + bReload + ",'" + 
 						sObj + "')", nTimeout);
 			}
 		}
@@ -2132,26 +2194,39 @@ function ltform_msg(elhtml, nSegs, bReload, sObj, sURL)
 		{
 			if (sURL != null)
 			{
-				window.setTimeout('ltform_msg_hide(' + bReload + ",null,'" + 
+				ltform_msgIST = 1;
+				ltform_msgTO = window.setTimeout('ltform_msg_hide(' + bReload + ",null,'" + 
 					sURL + "')", nTimeout);
 			}
 			else
 			{
-				window.setTimeout('ltform_msg_hide(' + bReload + ')', nTimeout);
+				ltform_msgIST = 1;
+				ltform_msgTO = window.setTimeout('ltform_msg_hide(' + bReload + ')', nTimeout);
 			}
 		}
 	}
 }
 
+function ltform_msg_seguir(bReload, sObj, sURL)
+{
+	var ssobj = '', ssurl = '';
+	if (sObj != null) ssobj = ",'" + sObj + "'"; else ssobj = ',null';
+	if (sURL != null) ssurl = ",'" + sURL + "'"; else ssurl = ',null';
+	return '<p><a href="javascript:void(0);" onclick="ltform_msg_hide(' + bReload + ssobj + ssurl + ');">Seguir</a></p>';
+}
+
+function ltform_msgs(elhtml, nSegs, bReload, sObj, sURL)
+{
+	ltform_msg(elhtml + ltform_msg_seguir(bReload, sObj, sURL), nSegs, bReload, sObj, sURL);
+}
+
 function ltform_wait(bShow)
 {
-	if (bShow)
+	var existe = document.getElementById('waiticon');
+	if (existe !== null)
 	{
-		$('waiticon').style.visibility = "visible";
-	}
-	else
-	{
-		$('waiticon').style.visibility = "hidden";
+		if (bShow) existe.style.visibility = "visible";
+		else existe.style.visibility = "hidden";
 	}
 }
 
@@ -2168,7 +2243,6 @@ function ltpane_toggle(sName)
 	$(sName + "_pnbutt").src = pstatus == 0 ? "pop-down.png": "pop-up.png";
 	$(sName + "_pnstatus").value = pstatus;
 }
-
 function PopupCenter(pageURL, title, w, h)
 {
 	var left = (screen.width/2)-(w/2);
@@ -2219,6 +2293,7 @@ function lt_savedefault(elobj, fmid)
 
 function row_delete(sTabla, rowid)
 {
+	var ii;
 	tabla = $(sTabla);
 	largo = tabla.rows.length;
 	for (ii = 0; ii < largo; ii++)
@@ -2249,16 +2324,81 @@ function lt_listbox_assign(lto, valor)
 		{
 			lto.selectedIndex = ii;
 			lto.options[ii].selected = true;
+			$("HDDN_" + lto.name).value = valor;
 			break;
 		}
 	}
+}
+
+function lt_listbox_add(oList, sValue, sDescr, bClear, bSet)
+{
+	if (bClear) oList.length = 0;
+	var tmpopt = document.createElement('option');
+	tmpopt.value = sValue;
+	tmpopt.text = sDescr;
+	try
+	{
+		oList.add(tmpopt, null);
+	}
+	catch (e)
+	{
+		oList.add(tmpopt);
+	}
+	if (bSet) lt_listbox_assign(oList, sValue);
+}
+
+function lt_listbox_from_array(oList, iSizeArray, aRecords, bClear, bSet)
+{
+	if (bClear) oList.length = 0;
+	var ndx;
+	for (ndx=0;ndx<iSizeArray;ndx++)
+	{
+		var tmpopt = document.createElement('option');
+		tmpopt.value = aRecords[ndx].v;
+		tmpopt.text = aRecords[ndx].ds;
+		try
+		{
+			oList.add(tmpopt, null);
+		}
+		catch (e)
+		{
+			oList.add(tmpopt);
+		}
+	}
+	if (bSet && iSizeArray > 0) lt_listbox_assign(oList, aRecords[0].v);
+}
+
+function lt_listbox_from_ajax(url, nombre)
+{
+	var re = false;
+	var qq = encodeURI(url);
+	ltform_wait(true);
+	$(nombre).length = 0;
+	var ajax = new Ajax.Request(qq, {asynchronous:false, method:'get'});
+	re = new Ajax.Response(ajax).responseJSON;
+	ltform_wait(false);
+	if (ajax.success())
+	{
+		lt_listbox_from_array($(nombre), re.lista.sz, re.lista.a, true, true);
+		isok = true;
+	}
+	return re;
+}
+
+function lt_radio_val(nombre)
+{
+	return $j('input[name=' + nombre + ']:checked').val();
 }
 
 function ltup_do(sTabla, sCampo, sKey, sKeyval)
 {
 	var oCampo = $(sCampo);
 	var isok = false;
-	var qq = encodeURI("ltable_olib_upfield.php?tbl="+sTabla+"&fn="+sCampo+"&fv="+oCampo.value+ "&kn="+sKey+"&kv="+sKeyval);
+	var sValor = oCampo.value;
+	if (oCampo.type == 'checkbox') sValor = chkval(oCampo);
+	if (oCampo.type == 'radio') sValor = lt_radio_val(sCampo);
+	var qq = encodeURI("ltable_olib_upfield.php?tbl="+sTabla+"&fn="+sCampo+"&fv="+sValor+ "&kn="+sKey+"&kv="+sKeyval);
+	//alert(qq);
 	ltform_wait(true);
 	var ajax = new Ajax.Request(qq, {asynchronous:false, method:'get'});
 	ltform_wait(false);
@@ -2304,5 +2444,84 @@ function lt_put_default(oCtrl, sName, nForm, nTipo)
 	//alert(qq);
 	new Ajax.Request(qq, { method: 'get', 
 		onFailure: function(request) { alert("Error guardando preferencias");}
+	});
+}
+
+function chkval(nombre)
+{
+	return $(nombre).checked ? '1': '0';
+}
+
+function lt_ajax(url, showmsg, nombre)
+{
+	var re = null;
+	var qq = encodeURI(url);
+	if (typeof showmsg == 'undefined') var showmsg = false;
+	if (typeof nombre == 'undefined') var nombre = null;
+	ltform_wait(true);
+	var ajax = new Ajax.Request(qq, {asynchronous:false, method:'get'});
+	re = new Ajax.Response(ajax).responseJSON;
+	ltform_wait(false);
+	if (showmsg) ltform_msg(re.msg, 10, 0, nombre);
+	return re;
+}
+
+function lt_ajaxx(url, fnCallback)
+{
+	var re = null;
+	var qq = encodeURI(url);
+	ltform_wait(true);
+	var ajax = new Ajax.Request(qq, {asynchronous:false, method:'get'});
+	re = new Ajax.Response(ajax).responseJSON;
+	ltform_wait(false);
+	return fnCallback(ajax.success(), re);
+}
+
+function lt_go(dummy, url)
+{
+	document.location.replace(url);
+}
+
+function obtener_mes(mes)
+{
+  switch (mes) 
+  {
+    case 1:return "Enero";
+    case 2:return "Febrero";
+    case 3:return "Marzo";
+    case 4:return "Abril";
+    case 5:return "Mayo";
+    case 6:return "Junio";
+    case 7:return "Julio";
+    case 8:return "Agosto";
+    case 9:return "Septiembre";
+    case 10:return "Octubre";
+    case 11:return "Noviembre";
+    case 12:return "Diciembre";
+    default:return "Valor no definido";
+  }
+}
+
+function lt_filelink_view(archivo)
+{
+	var qq = encodeURI('ltable_olib_filelink_viewer.php?fn='+archivo+'&dlg=1');
+	//alert(qq);
+	var newDiv = $j(document.createElement('div')); 
+	newDiv.load(qq).dialog({
+		modal:true, width:750, height:1100, 
+		title: "Ver archivo", 
+		close: function(e, ui) { $j(this).remove(); } 
+	});
+}
+
+function lt_file_view(tabla, campo, valor_clave, dlg)
+{
+	var qq = encodeURI('ltable_olib_file_viewer.php?tabla=' + tabla + '&campo=' + campo + '&valor=' + valor_clave + '&dlg=' + dlg);
+	console.log(qq);
+	var newDiv = $j(document.createElement('div')); 
+	newDiv.load(qq).dialog({
+		modal:true, width:750, height:1100, 
+		title: "Ver archivo", 
+		close: function(e, ui) { $j(this).remove(); } 
 	});
 }

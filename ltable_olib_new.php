@@ -1,7 +1,7 @@
 <?php
 require_once "ltable_olib.php";
 
-function ltnew_preprocess($fo, $lto)
+function ltnew_preprocess(lt_form $fo, ltable $lto)
 {
 	$isok = true;
 	
@@ -10,6 +10,7 @@ function ltnew_preprocess($fo, $lto)
 		$lto->fa['cnfno']->assign(rand(100000,999999));
 		$lto->fa['locales']->assign("(ninguno)"); 
 	}
+	
 	if ($lto->tabla == 'reserva_retiros')
 	{
 		$lto->fa['cnfno']->assign(rand(100000,999999));
@@ -29,6 +30,12 @@ function ltnew_preprocess($fo, $lto)
 		else $fo->qerr("LTNEW-10");
 	}
 	
+	if ($lto->tabla == 'depositos')
+	{
+		if ($fo->pid == 7) $lto->fa['dep_preconcepto']->assign(1);
+		if ($fo->pid == 5 || $fo->pid == 6) $lto->fa['dep_preconcepto']->assign(2);
+	}
+	
 	return $isok;
 }
 
@@ -37,6 +44,7 @@ $fo = new lt_form();
 $para = array('tabla', 'campo', 'valor');
 if (parms_isset($para, 2))
 {
+	$empotrado = isset($_REQUEST['_empotrado']);
 	if ($fo->dbopen())
 	{
 		$lto = new ltable();
@@ -49,7 +57,14 @@ if (parms_isset($para, 2))
 		{
 			if ($fo->usrchk($lto->form_id + 4, $lto->form_rw) != USUARIO_UNAUTH)
 			{
-				if (LT_FULL_HEADER) $fo->encabezado(true); else $fo->encabezado_base();
+				if ($empotrado) {
+					$fo->encabezado_base();
+					$fo->wait_icon();
+					$fo->msg();
+				}
+				else {
+					if (LT_FULL_HEADER) $fo->encabezado(true); else $fo->encabezado_base();
+				}
 				$fo->js($tabla . ".js");
 				if ($lto->load_record('', 0, true))
 				{
@@ -57,16 +72,18 @@ if (parms_isset($para, 2))
 
 					if (ltnew_preprocess($fo, $lto))
 					{
-						$fo->buf .= $lto->editar($urlret);
+						$fo->buf .= $lto->editar($urlret, $empotrado);
 					}
-					$fo->hr();
-					$fo->par(3);
-					$fo->lnk($urlret, "Volver al formulario anterior");
-					$fo->parx();
 				}
 				else $fo->buf .= $lto->render_error();
 			}
 		}
+	}
+	if (!$empotrado) {
+		$fo->hr();
+		$fo->par(3);
+		$fo->lnk($urlret, "Volver al formulario anterior");
+		$fo->parx();
 	}
 }
 $fo->footer();

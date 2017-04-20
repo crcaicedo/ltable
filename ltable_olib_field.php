@@ -21,13 +21,7 @@ class lt_field
 
 	public function autovar()
 	{
-		if ($this->autovar)
-		{
-			if ($this->fln == 'uid') $this->v = $_COOKIE['uid'];
-			if ($this->fln == 'proyecto_id') $this->v = $_COOKIE['pid'];
-			if ($this->fln == 'ipaddr') $this->v = $_SERVER['REMOTE_ADDR'];
-			if ($this->fln == 'cnf_serial') $this->v = sprintf("%06d", rand(1,999999));
-		}
+		if ($this->autovar) $this->v = autovar($this->fln);
 	}
 
 	public function to_text()

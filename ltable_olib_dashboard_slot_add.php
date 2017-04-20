@@ -1,52 +1,34 @@
 <?php
 require_once "ltable_olib.php";
 
-$reto = array("msg"=>"");
-$isok = false;
-$fo = new lt_form();
-$para = array("ds","sl","tp","cn","ti","pl");
-if (parms_isset($para,2))
+if (($fo = lt_form::respuesta(1, 'ds,i;sl,i;tp,i;cn,c;ti,c;pl,i')))
 {
-	if ($fo->dbopen())
+	$p = &$fo->p;
+	$titulo = trim($p->ti);
+	$contenido = trim($p->cn);
+	if ($p->tp == 1)
 	{
-		if ($fo->usrchk(1,3) !== USUARIO_UNAUTH)
+		$titulo = $contenido = "";
+		if (($r = lt_registro::crear($fo, 'dashboard_plugins', $p->pl)))
 		{
-			$dashboard_id = $_REQUEST["ds"]+0;
-			$slot_id = $_REQUEST["sl"]+0;
-			$uid = $_SESSION["uid"];
-			$tipo = $_REQUEST["tp"]+0;
-			$dashplugin_id = $_REQUEST["pl"]+0;
-			$titulo = mysql_real_escape_string($_REQUEST["ti"]);
-			$contenido = mysql_real_escape_string($_REQUEST["cn"]);
-			if ($tipo == 1)
-			{
-				$titulo=$contenido="";
-				$qb = new myquery($fo, sprintf("SELECT archivo,descripcion ".
-					"FROM dashboard_plugins WHERE dashplugin_id=%d", 
-					$dashplugin_id), "DASHADD-2");
-				if ($qb->isok)
-				{
-					$titulo = $qb->r->descripcion;
-					$contenido = $qb->r->archivo;
-				}
-			}
-			if ($titulo!="" && $contenido!="")
-			{
-				$qa = new myquery($fo, sprintf("REPLACE INTO dashboard_det VALUES ".
-					"(%d,%d,%d,%d,'%s','%s',0,0,1)",
-					$dashboard_id, $slot_id, $uid, $tipo, $titulo, $contenido), 
-					"DASHADD-1", true, true);
-				$isok=$qa->isok;
-				/*if ($qa->isok)
-				{
-					$isok = true;
-					$reto=array('msg'=>'','ds'=>$dashboard_id,'sl'=>$slot_id,
-						'tp'=>$tipo,'cn'=>$contenido);
-				}*/
-			}
-			else $fo->parc("Especifique titulo/URL", 3, "cursiva");
+			$titulo = $r->v->descripcion;
+			$contenido = $r->v->archivo;
 		}
 	}
+	if ($titulo != "" && $contenido != "")
+	{
+		$fl = new lt_campos('dashboard_id', 'i', $p->ds);
+		$fl->add('slot_id', 'i', $p->sl);
+		$fl->add('uid', 'i', $fo->uid);
+		$fl->add('tipo', 'i', $p->tp);
+		$fl->add('titulo', 'c', $titulo);
+		$fl->add('contenido', 'c', $contenido);
+		$fl->add('alto', 'i', 0);
+		$fl->add('ancho', 'i', 0);
+		$fl->add('editable', 'i', 1);
+		$fl->add('dashplugin_id', 'i', $p->pl);
+		$fo->isok = myquery::i($fo, 'dashboard_det', $fl, LT_REPLACE);
+	}
+	else $fo->parc("Especifique titulo/URL", 3, "cursiva");
 }
-$fo->tojson($isok, $reto, LTMSG_HIDE);
 ?>

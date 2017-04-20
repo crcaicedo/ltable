@@ -1,7 +1,8 @@
 <?php
 class lt_dashboard_slot
 {
-	public $dashboard_id=0, $slot_id=0, $tipo=0, $contenido="", $titulo="", $editable=1, $uid=0, $alto=0, $ancho=0;
+	public $dashboard_id=0, $slot_id=0, $tipo=0, $contenido="", $titulo="", $parametros='';
+	public $editable=1, $uid=0, $alto=0, $ancho=0;
 	public $js_a=array(), $js_sz=0;
 	function __construct()
 	{
@@ -36,7 +37,8 @@ class lt_dashboard_slot
 		if ($this->tipo == 1)
 		{
 			$fo->div($ns, 0, "", $st);
-			$jsld .= sprintf(" lt_dashboard_plugin(%d,%d,'%s');", $this->dashboard_id, $this->slot_id, $this->contenido);
+			$jsld .= sprintf(" lt_dashboard_plugin(%d,%d,'%s','%s');", 
+					$this->dashboard_id, $this->slot_id, $this->contenido, $this->parametros);
 			$fo->divx();
 		}
 		if ($this->tipo == 2) $fo->buf .= sprintf("<iframe src=\"%s\" scrolling=\"auto\" id=\"%s\" ".
@@ -70,9 +72,9 @@ class lt_dashboard
 
 			// load slots
 			$qb = new myquery($fo, sprintf("SELECT dashboard_id, slot_id, uid, tipo, titulo, contenido, ".
-				"alto, ancho, editable, js_inc ".
+				"alto, ancho, editable, js_inc, parametros ".
 				"FROM dashboard_det a ".
-				"LEFT JOIN dashboard_plugins b ON a.contenido=b.archivo ".
+				"LEFT JOIN dashboard_plugins b ON a.dashplugin_id=b.dashplugin_id ".
 				"WHERE dashboard_id=%d AND uid=%d",
 				$this->dashboard_id, $_SESSION['uid']), "DASHBOARD-2");
 			if ($qb->isok)
@@ -89,6 +91,7 @@ class lt_dashboard
 					$this->slots[$this->slots_sz]->alto = $rg->alto > 0 ? $rg->alto:$this->alto;
 					$this->slots[$this->slots_sz]->ancho = $rg->ancho > 0 ? $rg->ancho:$this->ancho;
 					$this->slots[$this->slots_sz]->editable = $rg->editable;
+					$this->slots[$this->slots_sz]->parametros = $rg->parametros;
 					if (!empty($rg->js_inc))
 					{
 						$this->slots[$this->slots_sz]->js_a = explode(',', $rg->js_inc);
@@ -144,7 +147,9 @@ class lt_dashboard
 		
 		$ls1 = new lt_listbox();
 		$ls1->n = "ltdsedit_plugin".$this->dashboard_id;
-		$ls1->tbl = "dashboard_plugins";
+		$ls1->custom = sprintf("SELECT dashplugin_id,descripcion FROM dashboard_plugins ".
+			"WHERE modulo_id IN (SELECT modulo_id FROM acceso WHERE uid=%d) ".
+			"ORDER BY descripcion", $_SESSION['uid']);
 		$ls1->fl_key = "dashplugin_id";
 		$ls1->fl_desc = "descripcion";
 
@@ -196,7 +201,7 @@ class lt_dashboard
 
 		$fo->divx();
 
-		$fo->tbl(3,-1,"2%");
+		$fo->tbl(3,-1,"2%",'');
 		$fo->tr();
 		$columna = 1;
 		foreach ($this->slots as $slot)

@@ -1,37 +1,19 @@
 <?php
 require_once "ltable_olib.php";
 
-$fo = new lt_form();
-if (mprs_dbcn())
+if (($fo = lt_form::principal(2000)))
 {
-	if ($fo->usrchk(2000, 3) != USUARIO_UNAUTH)
-	{
-		$fo->encabezado();
-		$tema = 'default';
-		if (isset($_COOKIE['tema'])) $tema = $_COOKIE['tema'];
+	$tema = 'default';
+	if (isset($_SESSION['tema'])) $tema = $_SESSION['tema'];
 
-		$fo->hdr("Escoger tema visual");
-		$fo->tbl();
-		$fo->tr();
-		$fo->td();
-		
-		$ls0 = new lt_listbox();
-		$ls0->n = 'nvotema';
-		$ls0->t = 'c';
-		$ls0->rowsource_type = 1;
-		$ls0->rowsource = array(array('default','Original'),array('rosa','Rosa'),
-			array('azul','Azul'), array('verde','Verde'));
-		$ls0->assign($tema);
-		$ls0->render($fo->buf);
-		
-		$fo->td();
-		$fo->butt('Cambiar tema', 'lt_theme_change(this)');
-		
-		$fo->trx();
-		$fo->tblx();		
-	}
-	mysql_close();
+	$fo->hdr("Escoger tema visual");
+	
+	$temaa = array(array('default','Original'),array('rosa','Rosa'),
+		array('azul','Azul'), array('verde','Verde'));
+	$ct = new lt_ctrl_set($fo, 'ltablethemefrm', 'ltable_theme_up.php');
+	$ct->setPostProcFn('ltable_theme_change_pp');
+	$ct->la('Tema', 'nvotema', 'c', $temaa, $tema);
+	$ct->u('Cambiar tema');
+	$ct->box_vertical();
 }
-$fo->footer();
-$fo->show();
 ?>

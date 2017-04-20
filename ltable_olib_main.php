@@ -1,37 +1,14 @@
 <?php
 require_once "ltable_olib.php";
 require_once "crm_fn.php";
-require_once "ipc_fn.php";
-
-function ltable_main_preprocess(lt_form $fo, ltable $lto)
-{
-	$isok = true;
-	
-	if ($lto->tabla == 'ipc') ipc_resumen($fo);
-	
-	return $isok;
-}
-
-function ltable_main_postprocess(lt_form $fo, ltable $lto)
-{
-	$isok = true;
-	
-	if ($lto->tabla == 'sms_listas')
-	{
-		$fo->par(3);
-		$fo->lnk("sms_promo_import.php","Importar...");
-		$fo->parx();
-	}
-	
-	return $isok;
-}
+require_once "ltable_olib_main_site.php";
 
 function ltable_search(ltable $lto, lt_form $fo)
 {
 	$st1 = 'border:1px solid black;';
-	$qa = new myquery($fo, sprintf("SELECT title, tblaux, flaux, flkey, orden, filtro " .
-		"FROM ltable_search WHERE tabla='%s' ORDER BY ordenv", $lto->tabla), "LTMSE-1", false);
-	if ($qa->sz > 0)
+	$q =sprintf("SELECT title, tblaux, flaux, flkey, orden, filtro " .
+		"FROM ltable_search WHERE tabla='%s' ORDER BY ordenv", $lto->tabla);
+	if (($qa = myquery::q($fo, $q, 'LTMSE-1')))
 	{
 		$txt0 = new lt_textbox();
 		$txt0->n = "valor";
@@ -66,12 +43,13 @@ function ltable_search(ltable $lto, lt_form $fo)
 function lt_main_query(ltable $lto, lt_form $mf)
 {
 	$q = plantilla_parse($lto->sql_expr, $_SESSION);
-	//echo $q;
+	//error_log($q);
+	//if ($lto->tabla == 'vendedores') $mf->dump($_SESSION);
 	
-	$abto = new lt_addbuttons($mf, $lto->tabla, $lto->fl0);
+	$abto = new lt_addbuttons($mf, $lto);
 	
 	$st1 = 'border:1px solid black;';
-	if (($res = mysql_query($q)) !== false)
+	if (($qp = myquery::q($mf, $q, 'LTMAIN-2', TRUE, FALSE, MYASSOC)))
 	{
 		$mf->tbl(3, -1, '2%', '', 'border-collapse:collapse;'.$st1);
 
@@ -86,7 +64,7 @@ function lt_main_query(ltable $lto, lt_form $mf)
 		$mf->trx();
 	
 		$recc = 0;
-		while (($row = mysql_fetch_assoc($res)) !== false)
+		foreach ($qp->a as $row)
 		{
 			$impar = $recc % 2;
 			$tdcl = "tdmain$impar";
@@ -129,7 +107,7 @@ function lt_main_query(ltable $lto, lt_form $mf)
 			}
 			
 			$valor = $row[$lto->fl0];
-			
+
 			$mf->td(3, 0, $tdcl);
 			$mf->frm($lto->edit_action);
 			$mf->hid('tabla', $lto->tabla);
@@ -155,9 +133,7 @@ function lt_main_query(ltable $lto, lt_form $mf)
 			$recc++;
 		}
 		$mf->tblx();
-		mysql_free_result($res);
 	}
-	else $mf->qerr("LTMAIN-2");	
 }
 
 $para = array("tabla");
@@ -180,11 +156,11 @@ if (parms_isset($para, 2))
 
 				$fo->hdr($lto->title);
 
-				ltable_search($lto, $fo);
-				
 				if (ltable_main_preprocess($fo, $lto))
 				{
-					$fo->tbl();
+					ltable_search($lto, $fo);
+				
+					$fo->tbl(LT_ALIGN_CENTER, LT_TABLE_BORDER_NONE, LT_TABLE_PADDING_DEFAULT, 'stdpg2');
 					$fo->frm($lto->new_action);
 					$fo->hid('tabla', $lto->tabla);
 					$fo->hid('campo', $fl0->n);
@@ -216,7 +192,6 @@ if (parms_isset($para, 2))
 		else $fo->parc("&laquo;Revisar definici&oacute;n de tabla&raquo;", 3, "cursiva");
 	}
 }
-else $fo->menuprinc();
 $fo->footer();
 $fo->show();
 ?>

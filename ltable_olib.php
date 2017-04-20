@@ -1,6 +1,7 @@
 <?php
-require_once "mprsfn.php";
-require_once "printers.php";
+require_once "ltable_siteconf.php";
+require_once RUTA_LT."mprsfn.php";
+require_once RUTA_LT."printers.php";
 
 define('LTO_TEXTBOX', 0);
 define('LTO_CHECKBOX', 1);
@@ -11,6 +12,8 @@ define('LTO_PASSWORD', 5);
 define('LTO_BUTTON', 6);
 define('LTO_BUTTON_GRP', 7);
 define('LTO_DATALIST', 8);
+define('LTO_FILE', 9); // archivo guardado en tabla
+define('LTO_FILE_LINK', 10); // enlace a archivo en server
 
 define('LISTON_NONE', 0);
 define('LISTON_BUTTON', 1);
@@ -21,61 +24,122 @@ define('LTMSG_HIDE', 'javascript:ltform_msg_hide(0);');
 define('LTMSG_RELOAD', 'javascript:document.location.reload();');
 define('LTMSG_CLOSE', 'javascript:window.close();');
 
-require_once "ltable_olib_field.php";
-require_once "ltable_olib_ctrl.php";
-require_once "ltable_olib_form.php";
-require_once "ltable_olib_var.php";
+define('LT_LISTBOX_ROWSOURCE_ARRAY', 1);
+define('LT_LISTBOX_ROWSOURCE_QUERY', 0);
+
+define('LT_ALIGN_CENTER', 3);
+define('LT_ALIGN_RIGHT', 2);
+define('LT_ALIGN_LEFT', 1);
+define('LT_ALIGN_DEFAULT', 0);
+
+define('LT_TABLE_BORDER_NONE', -1);
+define('LT_TABLE_CLASS_DEFAULT', 'stdpg');
+define('LT_TABLE_PADDING_DEFAULT', '2%');
+
+define('LISTA_STRING', 1);
+define('LISTA_ARRAY', 2);
+define('LISTA_LISTBOX', 3);
+define('LISTA_ROWSRC_AJAX', 4);
+
+define('FORM_MULTIPART', 'multipart/form-data');
+
+define('LTFLD_CONTEO', 1);
+define('LTFLD_SUMA', 2);
+
+require_once RUTA_LT."ltable_olib_field.php";
+require_once RUTA_LT."ltable_olib_ctrl.php";
+require_once RUTA_LT."ltable_olib_form.php";
+require_once RUTA_LT.'ltable_olib_accion.php';
+require_once RUTA_LT."ltable_olib_var.php";
+require_once RUTA_LT.'ltable_olib_ctrlset.php';
+require_once RUTA_LT."mime_fn.php";
+require_once RUTA_LT."ltable_olib_file.php";
 
 class lt_addbuttons
 {
-	private $a = array(), $sz = 0, $tabla='', $clave='', $fo = null;
-	public function __construct(lt_form $fo, $tabla, $campoclave)
+	private $a = array(), $sz = 0, $fo = null, $lto = null;
+    private $addparms_db = FALSE, $r;
+	public function __construct(lt_form $fo, ltable $lto)
 	{
 		$this->fo = $fo;
-		$this->tabla = $tabla;
-		$this->clave = $campoclave;
-		$this->load();
+        $this->lto = $lto;
+		$this->_load();
+        $this->_getAddParms();
 	}
-	private function load()
+	private function _load()
 	{
 		$this->sz = 0;
 		$this->a = array();
-		$qa = new myquery($this->fo, sprintf("SELECT app, newwnd, caption, app_parms FROM ltable_addbuttons ".
-			"WHERE tabla='%s' ORDER BY orden", $this->tabla), "LTADDBT-1", false);
-		foreach ($qa->a as $bt) $this->a[$this->sz++] = clone $bt; 
-		return $qa->isok;
+
+		if (($qa = myquery::q($this->fo, sprintf("SELECT app, newwnd, caption, app_parms FROM ltable_addbuttons ".
+			"WHERE tabla='%s' ORDER BY orden", $this->lto->tabla), "LTADDBT-1"))) {
+            foreach ($qa->a as $bt) $this->a[$this->sz++] = clone $bt;
+        }
 	}
 	public function render_titles($style="")
 	{
 		foreach ($this->a as $bt) $this->fo->th("-", 3, 0, "", $style);
 	}
+
+	private function _buildAddParms($bt)
+    {
+        if ($bt->addparms_c > 0) {
+            foreach ($bt->addparms as $ap) {
+                $hoy = lt_fecha::hoy();
+                $np = $ap['np'];
+                $nv = $ap['nv'];
+
+                if ($nv == 'hoy') $vv = $hoy->s();
+                elseif ($nv == 'hoy.mes') $vv = $hoy->m;
+                elseif ($nv == 'hoy.agno') $vv = $hoy->a;
+                elseif ($nv[0] == '@') $vv = substr($nv, 1);
+                else $vv = $this->r->r->$nv;
+
+                $this->fo->hid($np, $vv);
+            }
+        }
+    }
+
+	private function _getAddParms()
+    {
+        foreach ($this->a as &$btt) {
+            $btt->addparms = array();
+            $btt->addparms_c = 0;
+            $adda = explode(',', $btt->app_parms);
+            foreach ($adda as $p) {
+                $sta = explode('=', $p);
+                if (sizeof($sta) == 2) {
+                    $vn = trim(str_replace(array("{", "}"), '', $sta[1]));
+                    if ($vn != '') {
+                        $btt->addparms[$btt->addparms_c++] = array('np'=>$sta[0],'nv'=>$vn);
+                        if (array_search($vn, $this->lto->fl_names)) {
+                            $this->addparms_db = TRUE;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 	public function render($valor, $td_class="")
 	{
 		if ($this->sz > 0)
 		{
+            if ($this->addparms_db) {
+                $this->r = myquery::q($this->fo, sprintf("SELECT * FROM %s WHERE %s='%s'", $this->lto->tabla, $this->lto->fl0, $valor),
+                    "LMAIN-REG");
+            }
+
 			foreach ($this->a as $bt)
 			{
 				$this->fo->td(3, 0, $td_class);
-				if (empty($bt->app_parms))
-				{
-					$this->fo->frm($bt->app, $bt->newwnd == 1 ? true: false);
-					$this->fo->hid("tabla", $this->tabla);
-					$this->fo->hid("campo", $this->clave);
-					$this->fo->hid("valor", $valor);
-					$this->fo->sub($bt->caption);
-					$this->fo->frmx();
-				}
-				else
-				{
-					$hoy = fecha();
-					$app_parms = $bt->app_parms;
-					$app_parms = str_replace("{valor}", $valor, $app_parms);
-					$app_parms = str_replace("{hoy.mes}", $hoy['m'], $app_parms);
-					$app_parms = str_replace("{hoy.agno}", $hoy['a'], $app_parms);
-
-					$urlbt = sprintf("%s?%s", $bt->app, $app_parms);
-					$this->fo->lnk($urlbt, $bt->caption, "", "", $bt->newwnd == 1 ? "_blank": "");
-				}
+				$this->fo->frm($bt->app, $bt->newwnd == 1 ? true: false);
+				$this->fo->hid("tabla", $this->lto->tabla);
+				$this->fo->hid("campo", $this->lto->fl0);
+				$this->fo->hid("valor", $valor);
+                $this->_buildAddParms($bt);
+				$this->fo->sub($bt->caption);
+				$this->fo->frmx();
 				$this->fo->tdx();
 			}
 		}
@@ -114,22 +178,24 @@ class ltable
 	
 	public $fl0 = '', $fl1 = '', $fl_order = '', $insert_id = 0, $forzar_valor = false;
 	public $cols = 0, $rows = 0, $fa = array(), $ordenv = array();
-	public $dp = array(), $dp_count = 0;
+	public $dp = array(), $dp_count = 0, $fl_names = array();
 
 	public $error_code = 0, $error_msg = '';
 	
 	public $es_asunto = false;
+	private $tiene_fileupload = FALSE;
 		
 	public function render_error()
 	{
 		return sprintf("<p align=\"center\"><i>Error </i> <b>[%s]</b>: <code>%s</code></p>",
 			$this->error_code, $this->error_msg);	
 	}
-	
+
 	private function load_fl($row)
 	{
 		$valido = false;
 		$nc = $row['n'];
+        $this->fl_names[] = $nc;
 		switch ($row['ctrl_type'])
 		{
 			case LTO_TEXTBOX: $this->fa[$nc] = new lt_textbox(); $valido = true; break;
@@ -141,6 +207,8 @@ class ltable
 			case LTO_SEPARATOR: $this->fa[$nc] = new lt_separator(); $valido = true; break;
 			case LTO_BUTTON: $this->fa[$nc] = new lt_button(); $valido = true; break;
 			case LTO_BUTTON_GRP: $this->fa[$nc] = new lt_button_grp(); $valido = true; break;
+			case LTO_FILE: $this->fa[$nc] = new lt_file_upload(); $valido = true; $this->tiene_fileupload = TRUE; break;
+			case LTO_FILE_LINK: $this->fa[$nc] = new lt_file_upload(); $valido = true; $this->tiene_fileupload = TRUE; break;
 		}
 		if ($valido)
 		{
@@ -185,8 +253,8 @@ class ltable
 			if ($row['ctrl_type'] == LTO_LISTBOX)
 			{
 				$this->fa[$nc]->tbl = $row['ls_tbl'];
-				$this->fa[$nc]->custom = $row['ls_custom'];
-				$this->fa[$nc]->custom_new = $row['ls_custom_new'];
+				$this->fa[$nc]->custom = plantilla_parse($row['ls_custom'], $_SESSION);
+				$this->fa[$nc]->custom_new = plantilla_parse($row['ls_custom_new'], $_SESSION);
 				$this->fa[$nc]->fl_key = $row['ls_fl_key'];
 				$this->fa[$nc]->fl_desc = $row['ls_fl_desc'];
 				$this->fa[$nc]->fl_order = $row['ls_fl_order'];
@@ -196,7 +264,7 @@ class ltable
 			{
 				$this->fa[$nc]->load($this->tabla);
 			}
-
+			
 			$this->cols++;
 		}
 		else
@@ -360,7 +428,7 @@ class ltable
 		return $isok[0] && $isok[1] && $isok[2] && $isok[3];
 	}
 	
-	private function render_update($ctrl)
+	/*private function render_update($ctrl)
 	{
 		$sval = "";
 		if ($ctrl->dup == 1 && $this->nuevo == 0)
@@ -383,13 +451,13 @@ class ltable
 				$ctrl->n, $ctrl->n, $valfn, $this->tabla, $ctrl->n, $fko->n, $fko->v);
 		}
 		return $sval;
-	}
+	}*/
 	
-	public function editar($urlret="")
+	public function editar($urlret="", $empotrado=FALSE)
 	{
 		$trx = '';
 		//print_r($this->fa);
-		if ($urlret == "") $urlret = sprintf("ltable_olib_main.php?tabla=%s", $lto->tabla);
+		if ($urlret == "") $urlret = sprintf("ltable_olib_main.php?tabla=%s", $this->tabla);
 		$cv0 = $this->fa[$this->fl0]->v;
 		if ($this->nuevo && $cv0 == 0) $nrec = "<u>(nuevo)</u>"; else $nrec = "<i>$cv0</i>";
 		
@@ -477,16 +545,23 @@ class ltable
 		
 		$trx .= "<h3 align=\"center\">$this->title</h3>";
 		$trx .= "<h4 align=\"center\">Registro ID: $nrec</h4>";
-		$trx .= "<p style=\"text-align:center;margin:0px;\"><img src=\"wait.gif\" name=\"waiticon\" id=\"waiticon\" " .
-			"style=\"visibility:hidden;\" align=\"center\"></img></p>";
+		///$trx .= "<p style=\"text-align:center;margin:0px;\"><img src=\"wait.gif\" name=\"waiticon\" id=\"waiticon\" " .
+		///	"style=\"visibility:hidden;\" align=\"center\"></img></p>";
+		$trx .= '<div name="waiticon" id="waiticon" style="visibility:hidden;'.
+				'position:absolute;z-index:150;background:transparent;text-align:center;'.
+				'left:50%;top:50%;margin-left:-100px;margin-top:-100px;">'.
+				'<img src="wait.gif" name="waiticon" id="waiticon" /></div>';
 		$trx .= "<div name=\"ltform_msg\" id=\"ltform_msg\" " .
 			"style=\"position:absolute;z-index:6;top:100px;left:300px;visibility:hidden;background:white;".
 			"text-align:center;border:5px solid black;\">".
 			"<div name=\"ltform_msg_p\" id=\"ltform_msg_p\" ".
 			"style=\"text-align:center;margin:10px;background:white;\"></div></div>";
 		$trx .= "<div name=\"ltable_msg\" class=\"stdpg\"></div>";
-		$trx .= "<form name=\"$this->form_name\" action=\"$this->form_action\" method=\"post\">";
-		
+		$fu = '';
+		if ($this->tiene_fileupload) $fu = sprintf(" enctype=\"%s\"", FORM_MULTIPART);
+		$trx .= "<form name=\"$this->form_name\" action=\"$this->form_action\" method=\"post\"$fu>";
+
+        if ($empotrado) $trx .= "<input type=\"hidden\" name=\"_empotrado\" id=\"_empotrado\" value=\"1\">";
 		$trx .= "<input type=\"hidden\" name=\"tabla\" id=\"tabla\" value=\"$this->tabla\">";
 		$trx .= "<input type=\"hidden\" name=\"campo\" id=\"campo\" value=\"$this->fl0\">";
 		$trx .= "<input type=\"hidden\" name=\"valor\" id=\"valor\" value=\"$cv0\">";
@@ -522,7 +597,27 @@ class ltable
 					{
 						$trx .= sprintf("<th>%s</th><td>", $fx->title);
 						$fx->render($trx, $this->nuevo);
-						$trx .= $this->render_update($fx);
+						//$trx .= $this->render_update($fx);
+						if ($fx->ctrl_type == LTO_FILE && !$this->nuevo) // ver archivo empotrado en tabla
+						{
+							if (strlen($fx->v) > 0)
+							{
+								$trx .= sprintf("<a href=\"javascript:void(0);\" ".
+									"onclick=\"lt_file_view('%s','%s','%s',1);\">Ver</a>",
+									$this->tabla, $fx->n, $cv0);
+							}
+						}
+						if ($fx->ctrl_type == LTO_FILE_LINK && !$this->nuevo) // ver archivo enlazado
+						{
+							if (strlen($fx->v) > 0)
+							{
+								$trx .= (sprintf("<p><a href=\"archivos/%s\" target=\"_blank\">%s</a>&nbsp;<a href=\"javascript:void(0);\" onclick=\"lt_filelink_view('%s');\">Ver</a>", 
+									$fx->v, $fx->v, $fx->v));
+								$trx .= "&nbsp;<input type=\"checkbox\" id=\"_FILE_DELETE_$fx->n\" name=\"_FILE_DELETE_$fx->n\">".
+									"<label for\"_FILE_DELETE_$fx->n\">Eliminar</label>";
+								$trx .= "<input type=\"hidden\" id=\"_FILENAME_$fx->n\" name=\"_FILENAME_$fx->n\" " ."value= \"$fx->v\" ></p>";
+							}
+						}
 						$trx .= "</td>";
 					}
 				}
@@ -600,7 +695,7 @@ class ltable
 				if (stripos('dht', $fl->t) === false) $ctmp = ",$fl->n";
 				else $ctmp = ",UNIX_TIMESTAMP($fl->n) AS $fl->n";
 				$campos .= $ctmp;
-			}
+			}			
 		}
 		$campos = substr($campos, 1);
 		
@@ -611,8 +706,8 @@ class ltable
 		}
 		else
 		{
-			$query = sprintf("SELECT %s FROM %s WHERE %s",
-				$campos, $this->tabla, $condicion);			
+			$query = plantilla_parse(sprintf("SELECT %s FROM %s WHERE %s",
+				$campos, $this->tabla, $condicion, $_SESSION));
 		}
 		//echo "<p>Q=<b>$query</b></p>";
 		
@@ -635,6 +730,12 @@ class ltable
 						}
 						if ($fl->ctrl_type == LTO_PASSWORD) $this->fa[$cn]->v = $fl->df;
 						$this->fa[$cn]->format();
+					
+						if (array_search($fl->ctrl_type, array(LTO_TEXTBOX, LTO_CHECKBOX, LTO_LISTBOX, LTO_EDITBOX)) !== FALSE)
+						{
+							$this->fa[$cn]->setRegistroInfo($this->tabla, $this->fl0, $this->fa[$this->fl0]->v, $this->nuevo);
+							//error_log(print_r($this->fa[$cn],TRUE));
+						}
 					}
 					$isok = true;
 				}
@@ -671,23 +772,75 @@ class ltable
 		foreach ($this->fa as $fl)
 		{
 			//printf("n=%s<br>", $fl->n);
-			if (isset($_POST[$fl->n]))
+			if (strstr($fl->n, '_filetype') !== FALSE) continue;
+			if ($fl->ctrl_type == LTO_FILE || $fl->ctrl_type == LTO_FILE_LINK)
 			{
-				$fl->text = $_POST[$fl->n];
-				if (stripos($fl->funcion, 'U') !== false) $fl->text = strtoupper($fl->text);
-				if (stripos($fl->funcion, 'L') !== false) $fl->text = strtolower($fl->text);
-				if ($fl->ctrl_type == LTO_CHECKBOX) $fl->text = '1';
+				$fo = new lt_form();
+				//error_log('Archivo:'.$fl->n);
+				$fi = new file_upload($fo, $fl->n, 0, array(), $fl->ctrl_type == LTO_FILE_LINK, 'archivos/');
+				if ($fi->isok)
+				{
+					if ($fl->ctrl_type == LTO_FILE)
+					{
+						$this->fa[$fl->fln]->text = $fi->buffer;
+						//error_log('SIZE='.strlen($this->fa[$fl->fln]->text));
+						$ftype = $fl->n.'_filetype';
+						if (isset($this->fa[$ftype]))
+						{
+							$this->fa[$ftype]->text = $fi->tipo;
+							//error_log('TIPO='.$this->fa[$ftype]->text);
+						}
+					}
+					else
+					{
+						$this->fa[$fl->fln]->text = $fi->fn;
+					}
+				}
+				else
+				{
+					if ($fl->ctrl_type == LTO_FILE_LINK)
+					{
+						$hnm = "_FILENAME_$fl->n";
+						if (isset($_POST[$hnm]))
+						{
+							$fl->text = $_POST[$hnm];
+					
+							$fdm = "_FILE_DELETE_$fl->n";
+							if (isset($_POST[$fdm]))
+							{
+								if (@unlink("archivos/".$fl->text)) $fl->text = '';
+								else
+								{
+									$err = error_get_last();
+									error_log($err['message']);
+								}
+							}
+						}
+						$this->fa[$fl->fln]->text = $fl->text;
+					}
+					//error_log($fo->buf);
+				}
 			}
 			else
 			{
-				if ($fl->ctrl_type ==  LTO_CHECKBOX) $fl->text = '0';
-				if ($fl->ctrl_type == LTO_LISTBOX)
+				if (isset($_POST[$fl->n]))
 				{
-					$hnm = "HDDN_$fl->n";
-					if (isset($_POST[$hnm])) $fl->text = $_POST[$hnm];
+					$fl->text = $_POST[$fl->n];
+					if (stripos($fl->funcion, 'U') !== false) $fl->text = strtoupper($fl->text);
+					if (stripos($fl->funcion, 'L') !== false) $fl->text = strtolower($fl->text);
+					if ($fl->ctrl_type == LTO_CHECKBOX) $fl->text = '1';
 				}
+				else
+				{
+					if ($fl->ctrl_type ==  LTO_CHECKBOX) $fl->text = '0';
+					if ($fl->ctrl_type == LTO_LISTBOX)
+					{
+						$hnm = "HDDN_$fl->n";
+						if (isset($_POST[$hnm])) $fl->text = $_POST[$hnm];
+					}
+				}
+				$this->fa[$fl->fln]->text = $fl->text;
 			}
-			$this->fa[$fl->fln]->text = $fl->text;
 		}
 	}
 	
@@ -789,7 +942,7 @@ class ltable
 			$this->update_set = substr($ups, 1);
 			$upss = "UPDATE $this->tabla SET ".$this->update_set." WHERE $condicion";
 		}
-		
+		//error_log($upss);
 		return $upss;	
 	}
 	
@@ -797,9 +950,9 @@ class ltable
 	{
 		$isok = false;
 		
-		$this->load_post();
+		///$this->load_post();
 		$query = $this->build_update($campo, $valor, $condicion);
-		//echo "<p>Q=<b>$query</b></p>";
+		//error_log("Q=$query");
 		if (mysql_query($query) !== false)
 		{
 			$this->insert_id = mysql_insert_id();
@@ -983,5 +1136,26 @@ class ltable_addparms
 			foreach ($this->a as $pp) $lto->fa[$pp->n]->v = $pp->v;
 		}
 	}
+}
+/**
+ * 
+ * Retorna el valor de una variable de sistema automatica
+ * @param string $varname
+ * Nombre de la variable
+ * @param variant $default
+ * Valor por defecto
+ * @return variant
+ * Valor actual de la variable automatica
+ */
+function autovar($varname, $default='')
+{
+	$valor = $default;
+	//error_log("name=".$varname); 
+	if ($varname == 'uid' || $varname == 'sysuid') $valor = isset($_SESSION['uid']) ? $_SESSION['uid']+0: 47;
+	if ($varname == 'tienda_id' || $varname == 'tid') $valor = isset($_SESSION['tid']) ? $_SESSION['tid']+0: 99;
+	if ($varname == 'proyecto_id' || $varname == 'pid') $valor = isset($_SESSION['pid']) ? $_SESSION['pid']+0: 0;
+	if ($varname == 'ipaddr') $valor = get_ip_address();
+	if ($varname == 'cnf_serial') $valor = sprintf("%06d", rand(1,999999));
+	return $valor;
 }
 ?>
